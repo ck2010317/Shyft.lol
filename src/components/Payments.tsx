@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowUpRight, ArrowDownLeft, Shield, Lock, Send, DollarSign, ExternalLink, Eye, EyeOff, ChevronDown, Wallet, Check } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { ArrowUpRight, ArrowDownLeft, Shield, Lock, Send, DollarSign, ExternalLink, Eye, EyeOff, ChevronDown, Wallet, Check, RefreshCw } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { usePrivatePayment } from "@/hooks/usePrivatePayment";
 import { useProgram } from "@/hooks/useProgram";
+import type { Payment } from "@/types";
 
 function timeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -18,7 +19,7 @@ function timeAgo(timestamp: number): string {
 }
 
 export default function Payments() {
-  const { payments, isConnected } = useAppStore();
+  const { payments: localPayments, isConnected } = useAppStore();
   const [showSendForm, setShowSendForm] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
@@ -26,8 +27,66 @@ export default function Payments() {
   const { sendPayment, step: paymentStep, error: paymentError, txSignature, reset: resetPayment } = usePrivatePayment();
   const program = useProgram();
 
-  const totalSent = payments.filter((p) => p.sender === "me").reduce((sum, p) => sum + p.amount, 0);
-  const totalReceived = payments.filter((p) => p.recipient === "me").reduce((sum, p) => sum + p.amount, 0);
+  // On-chain payment records (includes both sent & received)
+  const [onChainPayments, setOnChainPayments] = useState<Payment[]>([]);
+  const [loadingOnChain, setLoadingOnChain] = useState(false);
+
+  const loadOnChainPayments = useCallback(async () => {
+    if (!program) return;
+    setLoadingOnChain(true);
+    try {
+      console.log("📡 Loading on-chain payment records...");
+      const chainPayments = await program.getAllPaymentsForUser();
+      console.log(`✅ Found ${chainPayments.length} on-chain payment records`);
+      setOnChainPayments(chainPayments);
+    } catch (err) {
+      console.error("Failed to load on-chain payments:", err);
+    }
+    setLoadingOnChain(false);
+  }, [program]);
+
+  // Load on-chain payments on mount and when program becomes available
+  useEffect(() => {
+    if (program && isConnected) {
+      loadOnChainPayments();
+    }
+  }, [program, isConnected, loadOnChainPayments]);
+
+  // Reload after a payment is sent
+  useEffect(() => {
+    if (paymentStep === "done" && program) {
+      // Give a short delay for on-chain data to settle
+      const timer = setTimeout(() => loadOnChainPayments(), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [paymentStep, program, loadOnChainPayments]);
+
+  // Merge local (sent) payments with on-chain payments, deduplicating by id
+  const allPayments = (() => {
+    const seen = new Set<string>();
+    const merged: Payment[] = [];
+
+    // On-chain payments take priority (they have real on-chain data)
+    for (const p of onChainPayments) {
+      if (!seen.has(p.id)) {
+        seen.add(p.id);
+        merged.push(p);
+      }
+    }
+
+    // Add local payments that aren't already on-chain
+    for (const p of localPayments) {
+      if (!seen.has(p.id)) {
+        seen.add(p.id);
+        merged.push(p);
+      }
+    }
+
+    return merged.sort((a, b) => b.timestamp - a.timestamp);
+  })();
+
+  const totalSent = allPayments.filter((p) => p.sender === "me").reduce((sum, p) => sum + p.amount, 0);
+  const totalReceived = allPayments.filter((p) => p.recipient === "me").reduce((sum, p) => sum + p.amount, 0);
 
   if (!isConnected) {
     return (
@@ -266,12 +325,28 @@ export default function Payments() {
 
       {/* Payment History */}
       <div className="bg-white rounded-2xl border border-[#E2E8F0]">
-        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-[#F1F5F9]">
-          <h3 className="text-sm font-semibold text-[#1A1A2E]">Transaction History</h3>
-          <p className="text-[10px] sm:text-[11px] text-[#64748B]">Payment records protected by MagicBlock TEE</p>
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-[#F1F5F9] flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-[#1A1A2E]">Transaction History</h3>
+            <p className="text-[10px] sm:text-[11px] text-[#64748B]">Payment records protected by MagicBlock TEE</p>
+          </div>
+          <button
+            onClick={loadOnChainPayments}
+            disabled={loadingOnChain}
+            className="p-2 rounded-lg hover:bg-[#F8FAFC] transition-colors disabled:opacity-50"
+            title="Refresh from blockchain"
+          >
+            <RefreshCw className={`w-4 h-4 text-[#64748B] ${loadingOnChain ? "animate-spin" : ""}`} />
+          </button>
         </div>
+        {loadingOnChain && allPayments.length === 0 && (
+          <div className="px-5 py-8 text-center">
+            <div className="w-5 h-5 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-xs text-[#64748B]">Loading payment records from blockchain...</p>
+          </div>
+        )}
         <div className="divide-y divide-[#F1F5F9]">
-          {payments.map((payment) => {
+          {allPayments.map((payment) => {
             const isSent = payment.sender === "me";
             return (
               <div key={payment.id} className="flex items-center gap-2.5 sm:gap-3 px-3.5 sm:px-5 py-3 sm:py-3.5 hover:bg-[#F8FAFC] transition-colors">
@@ -287,7 +362,7 @@ export default function Payments() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                     <p className="text-sm font-medium text-[#1A1A2E]">
-                      {isSent ? "Sent" : "Received"} {payment.amount} {payment.token}
+                      {isSent ? "Sent" : "Received"} {payment.amount.toFixed(2)} {payment.token}
                     </p>
                     {payment.isPrivate && (
                       <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-[#16A34A] bg-[#F0FDF4] px-1.5 py-0.5 rounded-full">
@@ -295,13 +370,13 @@ export default function Payments() {
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] text-[#94A3B8]">
+                  <p className="text-[11px] text-[#94A3B8] truncate">
                     {isSent ? `To: ${payment.recipient}` : `From: ${payment.sender}`} · {timeAgo(payment.timestamp)}
                   </p>
                 </div>
                 <div className="text-right">
                   <p className={`text-sm font-semibold ${isSent ? "text-[#1A1A2E]" : "text-[#16A34A]"}`}>
-                    {isSent ? "-" : "+"}{payment.amount}
+                    {isSent ? "-" : "+"}{payment.amount.toFixed(2)}
                   </p>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                     payment.status === "completed"
@@ -314,6 +389,12 @@ export default function Payments() {
               </div>
             );
           })}
+          {!loadingOnChain && allPayments.length === 0 && (
+            <div className="px-5 py-8 text-center">
+              <p className="text-sm text-[#94A3B8]">No payment records yet</p>
+              <p className="text-xs text-[#CBD5E1] mt-1">Send a payment to get started</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -543,6 +543,101 @@ export class ShyftClient {
       .sort((a: any, b: any) => a.messageIndex - b.messageIndex);
   }
 
+  /** Fetch all payment messages across all chats involving the current user.
+   *  Scans both regular and delegated message accounts with isPayment=true. */
+  async getAllPaymentsForUser(): Promise<any[]> {
+    const coder = new BorshCoder(idl as Idl);
+    const user = this.provider.wallet.publicKey;
+    const userStr = user.toBase58();
+
+    // 1. Get all chats involving this user
+    const allChats = await this.accounts.chat.all();
+    const userChats = allChats
+      .map((c: any) => ({
+        chatId: c.account.chatId?.toString() || "0",
+        user1: c.account.user1?.toBase58() || "",
+        user2: c.account.user2?.toBase58() || "",
+      }))
+      .filter((c: any) => c.user1 === userStr || c.user2 === userStr);
+
+    const userChatIds = new Set(userChats.map((c: any) => c.chatId));
+
+    // Build a map of chatId -> other participant
+    const chatParticipant: Record<string, string> = {};
+    for (const c of userChats) {
+      chatParticipant[c.chatId] = c.user1 === userStr ? c.user2 : c.user1;
+    }
+
+    const payments: any[] = [];
+
+    // 2. Scan all regular messages — filter by user's chats and isPayment
+    const allMessages = await this.accounts.message.all();
+    for (const m of allMessages) {
+      const chatId = m.account.chatId?.toString() || "0";
+      if (!userChatIds.has(chatId)) continue;
+      if (!m.account.isPayment) continue;
+
+      const sender = m.account.sender?.toBase58() || "";
+      const isSent = sender === userStr;
+
+      payments.push({
+        id: m.publicKey.toBase58(),
+        sender: isSent ? "me" : sender,
+        recipient: isSent ? (chatParticipant[chatId] || "") : "me",
+        amount: Number(m.account.paymentAmount || 0) / 1_000_000, // micro-SOL -> SOL
+        token: "SOL",
+        status: "completed" as const,
+        isPrivate: true,
+        timestamp: Number(m.account.timestamp?.toString() || "0") * 1000,
+        content: m.account.content || "",
+        isDelegated: false,
+      });
+    }
+
+    // 3. Scan delegated messages (589 bytes) for payment messages in user's chats
+    try {
+      const delegatedAccounts = await this.provider.connection.getProgramAccounts(
+        DELEGATION_PROGRAM_ID,
+        { filters: [{ dataSize: 589 }] }
+      );
+      for (const acc of delegatedAccounts) {
+        try {
+          const decoded = coder.accounts.decode("Message", acc.account.data);
+          const chatId = decoded.chat_id?.toString() || "0";
+          if (!userChatIds.has(chatId)) continue;
+          if (!decoded.is_payment) continue;
+
+          const pubkey = acc.pubkey.toBase58();
+          // Skip if already found in regular
+          if (payments.find(p => p.id === pubkey)) continue;
+
+          const sender = decoded.sender?.toBase58() || "";
+          const isSent = sender === userStr;
+
+          payments.push({
+            id: pubkey,
+            sender: isSent ? "me" : sender,
+            recipient: isSent ? (chatParticipant[chatId] || "") : "me",
+            amount: Number(decoded.payment_amount || 0) / 1_000_000,
+            token: "SOL",
+            status: "completed" as const,
+            isPrivate: true,
+            timestamp: Number(decoded.timestamp?.toString() || "0") * 1000,
+            content: decoded.content || "",
+            isDelegated: true,
+          });
+        } catch {
+          // Not a Message account
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch delegated payment messages:", err);
+    }
+
+    // Sort by timestamp descending (newest first)
+    return payments.sort((a, b) => b.timestamp - a.timestamp);
+  }
+
   /** Create a private chat with MagicBlock TEE delegation */
   async createPrivateChatFull(
     chatId: number,
