@@ -8,6 +8,7 @@ import { useProgram } from "@/hooks/useProgram";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import type { Post } from "@/types";
+import { ShyftClient } from "@/lib/program";
 
 function timeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -119,6 +120,206 @@ function PostCard({ post }: { post: Post }) {
               <button
                 onClick={handleComment}
                 className="touch-active w-9 h-9 rounded-lg bg-[#2563EB] text-white flex items-center justify-center hover:bg-[#1D4ED8] transition-colors flex-shrink-0"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Reusable on-chain post card with working likes + comments */
+function OnChainPostCard({
+  post,
+  profile,
+  isMe,
+  program,
+  variant,
+}: {
+  post: any;
+  profile: any;
+  isMe: boolean;
+  program: ShyftClient | null;
+  variant: "public" | "private";
+}) {
+  const { onChainComments, addOnChainComment, likedPosts, addLikedPost, isConnected, currentUser } = useAppStore();
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [liking, setLiking] = useState(false);
+  const [localLikeBoost, setLocalLikeBoost] = useState(0);
+
+  const hasLiked = likedPosts.includes(post.publicKey);
+  const comments = onChainComments[post.publicKey] || [];
+  const totalLikes = Number(post.likes || 0) + localLikeBoost;
+  const totalComments = Number(post.commentCount || 0) + comments.length;
+
+  const displayName = isMe
+    ? "You"
+    : profile?.displayName && profile.displayName !== "You" && profile.displayName !== "Anonymous"
+      ? profile.displayName
+      : post.author.slice(0, 4) + "..." + post.author.slice(-4);
+  const username = isMe
+    ? "you"
+    : profile?.username && profile.username !== "you" && profile.username !== "anon"
+      ? profile.username
+      : post.author.slice(0, 8);
+
+  const handleLike = async () => {
+    if (!program || !isConnected || hasLiked || liking) return;
+    setLiking(true);
+    try {
+      const authorPubkey = new PublicKey(post.author);
+      const postId = Number(post.postId);
+      await program.likePost(authorPubkey, postId);
+      addLikedPost(post.publicKey);
+      setLocalLikeBoost((prev) => prev + 1);
+      toast("success", "Liked! ❤️", "Your like has been recorded on-chain");
+    } catch (err: any) {
+      console.error("Like error:", err);
+      if (err?.message?.includes("User rejected") || err?.message?.includes("rejected the request")) {
+        toast("error", "Like cancelled", "You rejected the transaction");
+      } else {
+        toast("error", "Like failed", err?.message?.slice(0, 80) || "Please try again");
+      }
+    }
+    setLiking(false);
+  };
+
+  const handleComment = () => {
+    if (!commentText.trim() || !currentUser) return;
+    addOnChainComment(
+      post.publicKey,
+      currentUser.publicKey,
+      currentUser.displayName,
+      commentText.trim()
+    );
+    setCommentText("");
+    toast("success", "Comment added", "Your comment has been saved");
+  };
+
+  const isPublic = variant === "public";
+
+  return (
+    <div className="bg-white rounded-2xl border border-[#E2E8F0] p-3.5 sm:p-5 mb-3 sm:mb-4 animate-fade-in hover:shadow-md transition-shadow duration-300">
+      {/* Author */}
+      <div className="flex items-center gap-2.5 sm:gap-3 mb-3">
+        <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-lg sm:text-xl border-2 border-white shadow-sm flex-shrink-0 ${
+          isMe
+            ? "bg-gradient-to-br from-[#EBF4FF] to-[#E0F2FE]"
+            : isPublic
+              ? "bg-gradient-to-br from-[#F0FDF4] to-[#DCFCE7]"
+              : "bg-gradient-to-br from-[#F0FDF4] to-[#DCFCE7]"
+        }`}>
+          {isMe ? "🔒" : isPublic ? "👤" : "👥"}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            <span className="font-semibold text-[#1A1A2E] text-sm truncate">{displayName}</span>
+            <span className="text-xs text-[#94A3B8] truncate">@{username}</span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-xs text-[#94A3B8]">
+              {post.createdAt !== "0" ? timeAgo(Number(post.createdAt) * 1000) : "recently"}
+            </span>
+            {isPublic ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-full">
+                <Globe className="w-2.5 h-2.5" /> On-Chain
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#16A34A] bg-[#F0FDF4] px-2 py-0.5 rounded-full">
+                <Lock className="w-2.5 h-2.5" /> Friends Only
+              </span>
+            )}
+            {post.isDelegated && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#7C3AED] bg-[#F5F3FF] px-2 py-0.5 rounded-full">
+                <Shield className="w-2.5 h-2.5" /> TEE
+              </span>
+            )}
+          </div>
+        </div>
+        {!isPublic && (
+          <div className="w-8 h-8 rounded-lg bg-[#F0FDF4] flex items-center justify-center flex-shrink-0">
+            <Shield className="w-4 h-4 text-[#16A34A]" />
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      <p className="text-[#1A1A2E] text-sm leading-relaxed mb-4 pl-0 sm:pl-14">{post.content}</p>
+
+      {/* Actions */}
+      <div className="flex items-center gap-0.5 sm:gap-1 pl-0 sm:pl-14 border-t border-[#F1F5F9] pt-3">
+        <button
+          onClick={handleLike}
+          disabled={!isConnected || hasLiked || liking}
+          className={`touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium transition-all ${
+            hasLiked
+              ? "text-red-500 bg-red-50"
+              : liking
+                ? "text-red-400 bg-red-50 opacity-60"
+                : "text-[#94A3B8] hover:text-red-500 hover:bg-red-50 active:bg-red-50"
+          } disabled:cursor-not-allowed`}
+        >
+          <Heart className={`w-4 h-4 ${hasLiked ? "fill-red-500" : ""} ${liking ? "animate-pulse" : ""}`} />
+          {totalLikes}
+        </button>
+        <button
+          onClick={() => setShowComments(!showComments)}
+          className="touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium text-[#94A3B8] hover:text-[#2563EB] hover:bg-[#EFF6FF] active:bg-[#EFF6FF] transition-all"
+        >
+          <MessageCircle className="w-4 h-4" />
+          {totalComments}
+        </button>
+        <button className="touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium text-[#94A3B8] hover:text-[#16A34A] hover:bg-[#F0FDF4] active:bg-[#F0FDF4] transition-all">
+          <Share2 className="w-4 h-4" />
+        </button>
+        <a
+          href={`https://explorer.solana.com/address/${post.publicKey}?cluster=devnet`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`ml-auto text-[10px] hover:underline ${isPublic ? "text-[#2563EB]" : "text-[#16A34A]"}`}
+        >
+          View on Explorer
+        </a>
+      </div>
+
+      {/* Comments section */}
+      {showComments && (
+        <div className="mt-3 pl-0 sm:pl-14 space-y-3">
+          {comments.length === 0 && (
+            <p className="text-xs text-[#94A3B8] text-center py-2">No comments yet. Be the first!</p>
+          )}
+          {comments.map((comment) => (
+            <div key={comment.id} className="flex gap-2 animate-fade-in">
+              <div className="w-7 h-7 rounded-full bg-[#F1F5F9] flex items-center justify-center text-xs flex-shrink-0">
+                💬
+              </div>
+              <div className="flex-1 bg-[#F8FAFC] rounded-xl px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-[#1A1A2E]">{comment.displayName}</span>
+                  <span className="text-[10px] text-[#94A3B8]">{timeAgo(comment.timestamp)}</span>
+                </div>
+                <p className="text-xs text-[#475569] mt-0.5">{comment.content}</p>
+              </div>
+            </div>
+          ))}
+          {isConnected && (
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleComment()}
+                placeholder="Write a comment..."
+                className="flex-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+              />
+              <button
+                onClick={handleComment}
+                disabled={!commentText.trim()}
+                className="touch-active w-9 h-9 rounded-lg bg-[#2563EB] text-white flex items-center justify-center hover:bg-[#1D4ED8] disabled:opacity-40 transition-colors flex-shrink-0"
               >
                 <Send className="w-3.5 h-3.5" />
               </button>
@@ -361,48 +562,16 @@ export default function Feed() {
 
           {onchainPosts.map((post) => {
             const profile = profileMap[post.author];
-            const isMe = publicKey && post.author === publicKey.toBase58();
-            const displayName = isMe ? "You" : (profile?.displayName && profile.displayName !== "You" && profile.displayName !== "Anonymous" ? profile.displayName : post.author.slice(0, 4) + "..." + post.author.slice(-4));
-            const username = isMe ? "you" : (profile?.username && profile.username !== "you" && profile.username !== "anon" ? profile.username : post.author.slice(0, 8));
+            const isMe = publicKey ? post.author === publicKey.toBase58() : false;
             return (
-              <div key={post.publicKey} className="bg-white rounded-2xl border border-[#E2E8F0] p-3.5 sm:p-5 mb-3 sm:mb-4 animate-fade-in hover:shadow-md transition-shadow duration-300">
-                <div className="flex items-center gap-2.5 sm:gap-3 mb-3">
-                  <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-lg sm:text-xl border-2 border-white shadow-sm flex-shrink-0 ${isMe ? "bg-gradient-to-br from-[#EBF4FF] to-[#E0F2FE]" : "bg-gradient-to-br from-[#F0FDF4] to-[#DCFCE7]"}`}>
-                    {isMe ? "🔒" : "👤"}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                      <span className="font-semibold text-[#1A1A2E] text-sm truncate">{displayName}</span>
-                      <span className="text-xs text-[#94A3B8] truncate">@{username}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-xs text-[#94A3B8]">
-                        {post.createdAt !== "0" ? timeAgo(Number(post.createdAt) * 1000) : "recently"}
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-full">
-                        <Globe className="w-2.5 h-2.5" /> On-Chain
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-[#1A1A2E] text-sm leading-relaxed mb-3 pl-0 sm:pl-14">{post.content}</p>
-                <div className="flex items-center gap-3 pl-0 sm:pl-14 pt-3 border-t border-[#F1F5F9] text-xs text-[#94A3B8]">
-                  <span className="flex items-center gap-1">
-                    <Heart className="w-3.5 h-3.5" /> {post.likes}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <MessageCircle className="w-3.5 h-3.5" /> {post.commentCount}
-                  </span>
-                  <a
-                    href={`https://explorer.solana.com/address/${post.publicKey}?cluster=devnet`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-auto text-[10px] text-[#2563EB] hover:underline"
-                  >
-                    View on Explorer
-                  </a>
-                </div>
-              </div>
+              <OnChainPostCard
+                key={post.publicKey}
+                post={post}
+                profile={profile}
+                isMe={isMe}
+                program={program}
+                variant="public"
+              />
             );
           })}
         </div>
@@ -430,52 +599,16 @@ export default function Feed() {
           ) : (
             privatePostsFromFriends.map((post) => {
               const profile = profileMap[post.author];
-              const displayName = profile?.displayName && profile.displayName !== "You" && profile.displayName !== "Anonymous" ? profile.displayName : post.author.slice(0, 4) + "..." + post.author.slice(-4);
-              const username = profile?.username && profile.username !== "you" && profile.username !== "anon" ? profile.username : post.author.slice(0, 8);
+              const isMe = publicKey ? post.author === publicKey.toBase58() : false;
               return (
-                <div key={post.publicKey} className="bg-white rounded-2xl border border-[#E2E8F0] p-3.5 sm:p-5 mb-3 sm:mb-4 animate-fade-in hover:shadow-md transition-shadow duration-300">
-                  <div className="flex items-center gap-2.5 sm:gap-3 mb-3">
-                    <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-[#F0FDF4] to-[#DCFCE7] flex items-center justify-center text-lg sm:text-xl border-2 border-white shadow-sm flex-shrink-0">
-                      👥
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                        <span className="font-semibold text-[#1A1A2E] text-sm truncate">{displayName}</span>
-                        <span className="text-xs text-[#94A3B8] truncate">@{username}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-xs text-[#94A3B8]">
-                          {post.createdAt !== "0" ? timeAgo(Number(post.createdAt) * 1000) : "recently"}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#16A34A] bg-[#F0FDF4] px-2 py-0.5 rounded-full">
-                          <Lock className="w-2.5 h-2.5" /> Friends Only
-                        </span>
-                        {post.isDelegated && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#7C3AED] bg-[#F5F3FF] px-2 py-0.5 rounded-full">
-                            <Shield className="w-2.5 h-2.5" /> TEE
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-[#1A1A2E] text-sm leading-relaxed mb-3 pl-0 sm:pl-14">{post.content}</p>
-                  <div className="flex items-center gap-3 pl-0 sm:pl-14 pt-3 border-t border-[#F1F5F9] text-xs text-[#94A3B8]">
-                    <span className="flex items-center gap-1">
-                      <Heart className="w-3.5 h-3.5" /> {post.likes}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MessageCircle className="w-3.5 h-3.5" /> {post.commentCount}
-                    </span>
-                    <a
-                      href={`https://explorer.solana.com/address/${post.publicKey}?cluster=devnet`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-auto text-[10px] text-[#16A34A] hover:underline"
-                    >
-                      View on Explorer
-                    </a>
-                  </div>
-                </div>
+                <OnChainPostCard
+                  key={post.publicKey}
+                  post={post}
+                  profile={profile}
+                  isMe={isMe}
+                  program={program}
+                  variant="private"
+                />
               );
             })
           )}

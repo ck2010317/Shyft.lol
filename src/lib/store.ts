@@ -29,6 +29,12 @@ interface AppState {
   addPayment: (payment: Payment) => void;
   updatePaymentStatus: (paymentId: string, status: Payment["status"]) => void;
 
+  // On-chain post interactions
+  onChainComments: Record<string, { id: string; author: string; displayName: string; content: string; timestamp: number }[]>;
+  addOnChainComment: (postKey: string, author: string, displayName: string, content: string) => void;
+  likedPosts: string[]; // array of post publicKeys the user has liked
+  addLikedPost: (postKey: string) => void;
+
   // Privacy settings
   friendsOnlyDefault: boolean;
   setFriendsOnlyDefault: (val: boolean) => void;
@@ -163,6 +169,22 @@ export const useAppStore = create<AppState>()(
       payments: state.payments.map((p) => (p.id === paymentId ? { ...p, status } : p)),
     })),
 
+  // On-chain post interactions
+  onChainComments: {},
+  addOnChainComment: (postKey, author, displayName, content) => {
+    const comment = { id: Date.now().toString() + Math.random().toString(36).slice(2), author, displayName, content, timestamp: Date.now() };
+    set((state) => ({
+      onChainComments: {
+        ...state.onChainComments,
+        [postKey]: [...(state.onChainComments[postKey] || []), comment],
+      },
+    }));
+  },
+  likedPosts: [],
+  addLikedPost: (postKey) => set((state) => ({
+    likedPosts: state.likedPosts.includes(postKey) ? state.likedPosts : [...state.likedPosts, postKey],
+  })),
+
   // Privacy settings
   friendsOnlyDefault: true,
   setFriendsOnlyDefault: (val) => set({ friendsOnlyDefault: val }),
@@ -181,6 +203,8 @@ export const useAppStore = create<AppState>()(
         conversations: state.conversations,
         messages: state.messages,
         payments: state.payments,
+        onChainComments: state.onChainComments,
+        likedPosts: state.likedPosts,
         friendsOnlyDefault: state.friendsOnlyDefault,
       }),
     }
