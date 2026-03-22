@@ -12,7 +12,8 @@ interface AppState {
 
   // Feed
   posts: Post[];
-  addPost: (content: string, isPrivate: boolean) => void;
+  addPost: (content: string, isPrivate: boolean) => string; // returns post id
+  removePost: (postId: string) => void;
   toggleLike: (postId: string) => void;
   addComment: (postId: string, content: string) => void;
 
@@ -54,7 +55,7 @@ export const useAppStore = create<AppState>()(
   posts: [],
   addPost: (content, isPrivate) => {
     const user = get().currentUser;
-    if (!user) return;
+    if (!user) return "";
     const newPost: Post = {
       id: uuidv4(),
       author: user,
@@ -66,7 +67,9 @@ export const useAppStore = create<AppState>()(
       isLiked: false,
     };
     set((state) => ({ posts: [newPost, ...state.posts] }));
+    return newPost.id;
   },
+  removePost: (postId) => set((state) => ({ posts: state.posts.filter((p) => p.id !== postId) })),
   toggleLike: (postId) =>
     set((state) => ({
       posts: state.posts.map((p) =>

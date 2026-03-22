@@ -131,7 +131,7 @@ function PostCard({ post }: { post: Post }) {
 }
 
 export default function Feed() {
-  const { posts, addPost, isConnected, friendsOnlyDefault } = useAppStore();
+  const { posts, isConnected, friendsOnlyDefault } = useAppStore();
   const [newPost, setNewPost] = useState("");
   const [isPrivate, setIsPrivate] = useState(friendsOnlyDefault);
   const program = useProgram();
@@ -227,11 +227,11 @@ export default function Feed() {
     const content = newPost;
     const privacy = isPrivate;
 
-    // Instant local update
-    addPost(content, privacy);
+    // Instant local update (optimistic)
+    const localPostId = useAppStore.getState().addPost(content, privacy);
     setNewPost("");
 
-    toast("privacy", "Post created", privacy ? "Encrypted via PER — only friends can see this" : "Posted publicly to your feed");
+    toast("privacy", "Posting...", privacy ? "Creating private post with MagicBlock TEE" : "Publishing to your feed");
 
     // On-chain call in background
     try {
@@ -262,9 +262,16 @@ export default function Feed() {
     } catch (err: any) {
       console.error("On-chain post error:", err);
       const errorMsg = err?.message?.slice(0, 150) || "Unknown error";
+
+      // Remove the optimistic local post since it failed
+      if (localPostId) {
+        useAppStore.getState().removePost(localPostId);
+      }
       
       // Provide helpful error messages
-      if (errorMsg.includes("need to create a profile")) {
+      if (errorMsg.includes("User rejected") || errorMsg.includes("rejected the request")) {
+        toast("error", "Post cancelled", "You rejected the transaction");
+      } else if (errorMsg.includes("need to create a profile")) {
         toast("error", "Profile required", errorMsg);
       } else if (errorMsg.includes("Provided seeds")) {
         toast("error", "Account error", "Account setup issue - make sure your profile is created and try again");
