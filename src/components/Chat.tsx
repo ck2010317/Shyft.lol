@@ -204,7 +204,8 @@ export default function Chat() {
     }
   };
 
-  /** Set up ephemeral chat: delegate profile → create conversation (pre-allocated) → undelegate */
+  /** Set up ephemeral chat: delegate profile → create conversations for ALL friends → undelegate.
+   *  This way the user only pays the delegation cost ONCE, not per-friend. */
   const setupEphemeralChat = async (friend: FriendInfo): Promise<boolean> => {
     if (!program || !publicKey) return false;
     setSettingUp(true);
@@ -223,49 +224,62 @@ export default function Chat() {
       await program.waitForProfileOnER(8000);
       console.log("✅ Profile confirmed on ER");
 
-      // Step 3: Check conversation state and handle accordingly
-      // IMPORTANT: The MagicBlock ER does NOT support realloc. We must create
-      // the conversation at its full final size in a single instruction.
-      // If a stale (too-small) conversation exists, close it first then recreate.
-      const hasUsable = await program.conversationExists(publicKey, friend.pubkey);
-
-      if (hasUsable) {
-        console.log("✅ Usable conversation already exists — skipping create");
-      } else {
-        // Check if there's a stale conversation to clean up first
-        const stalePda = await program.findStaleConversation(publicKey, friend.pubkey);
-        if (stalePda) {
-          console.log("🗑️ Closing stale conversation before recreating...");
-          toast("privacy", "Cleaning up old conversation", "Removing stale data...");
-          try {
-            await program.closeConversation(friend.pubkey);
-            console.log("✅ Stale conversation closed");
-          } catch (closeErr: any) {
-            console.warn("Close stale conv failed:", closeErr?.message?.slice(0, 80));
-          }
-          // Wait for ER to fully process the close before creating at same PDA
-          await new Promise(r => setTimeout(r, 3000));
-        }
-
-        // Create conversation at FULL capacity (no realloc — ER doesn't support it)
-        toast("privacy", "Creating ephemeral conversation", "Setting up private channel...");
-        let created = false;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            await program.createConversation(friend.pubkey, 10);
-            console.log("✅ Conversation created with 10-message capacity");
-            created = true;
-            break;
-          } catch (err: any) {
-            console.warn(`createConversation(10) attempt ${attempt}/3 failed:`, err?.message?.slice(0, 100));
-            if (attempt < 3) {
-              await new Promise(r => setTimeout(r, 3000 * attempt));
-            } else {
-              throw err;
+      // Step 3: Create conversations for ALL friends who don't have one yet
+      // This way we only delegate/undelegate ONCE, not per-friend
+      const friendsNeedingConv: FriendInfo[] = [];
+      for (const f of friends) {
+        if (!f.isMutual) continue; // only mutual friends
+        const hasUsable = await program.conversationExists(publicKey, f.pubkey);
+        if (!hasUsable) {
+          // Check for stale conversations to clean up first
+          const stalePda = await program.findStaleConversation(publicKey, f.pubkey);
+          if (stalePda) {
+            console.log(`🗑️ Closing stale conversation with ${f.address.slice(0, 8)}...`);
+            try {
+              await program.closeConversation(f.pubkey);
+              await new Promise(r => setTimeout(r, 2000));
+            } catch (closeErr: any) {
+              console.warn("Close stale conv failed:", closeErr?.message?.slice(0, 80));
             }
           }
+          friendsNeedingConv.push(f);
         }
-        if (!created) return false;
+      }
+
+      // Make sure the target friend is in the list (even if not mutual yet in state)
+      if (!friendsNeedingConv.some(f => f.pubkey.equals(friend.pubkey))) {
+        const hasUsable = await program.conversationExists(publicKey, friend.pubkey);
+        if (!hasUsable) {
+          friendsNeedingConv.push(friend);
+        }
+      }
+
+      if (friendsNeedingConv.length === 0) {
+        console.log("✅ All conversations already exist — skipping create");
+      } else {
+        const total = friendsNeedingConv.length;
+        console.log(`📨 Creating ${total} conversation(s) in batch...`);
+        for (let i = 0; i < friendsNeedingConv.length; i++) {
+          const f = friendsNeedingConv[i];
+          toast("privacy", `Creating chat ${i + 1}/${total}`, `Setting up chat with ${f.displayName}...`);
+          let created = false;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              await program.createConversation(f.pubkey, 10);
+              console.log(`✅ Conversation created with ${f.address.slice(0, 8)}... (${i + 1}/${total})`);
+              created = true;
+              break;
+            } catch (err: any) {
+              console.warn(`createConversation attempt ${attempt}/3 for ${f.address.slice(0, 8)} failed:`, err?.message?.slice(0, 100));
+              if (attempt < 3) {
+                await new Promise(r => setTimeout(r, 3000 * attempt));
+              }
+            }
+          }
+          if (!created) {
+            console.warn(`⚠️ Failed to create conversation with ${f.address.slice(0, 8)} — will retry next time`);
+          }
+        }
       }
 
       // Step 4: Undelegate profile so normal operations (posting, etc.) work again
@@ -278,7 +292,12 @@ export default function Chat() {
         console.warn("Undelegate after chat setup failed:", err?.message?.slice(0, 80));
       }
 
-      toast("success", "Ephemeral chat ready! ⚡", "Messages are free, private & real-time");
+      // Refresh chat list to show newly created conversations
+      await loadFriendsAndChats();
+
+      toast("success", "Ephemeral chats ready! ⚡", friendsNeedingConv.length > 1
+        ? `Set up ${friendsNeedingConv.length} chats — all free messaging from now on`
+        : "Messages are free, private & real-time");
       return true;
     } catch (err: any) {
       console.error("Setup failed:", err);
