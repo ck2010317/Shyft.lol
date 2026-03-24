@@ -1,5 +1,5 @@
 import { Program, AnchorProvider, Idl, BN, BorshCoder } from "@coral-xyz/anchor";
-import { Connection, PublicKey, SystemProgram, Keypair } from "@solana/web3.js";
+import { Connection, PublicKey, SystemProgram, Keypair, Transaction } from "@solana/web3.js";
 import idl from "./idl.json";
 
 const PROGRAM_ID = new PublicKey("EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ");
@@ -9,11 +9,69 @@ const TEE_VALIDATOR = new PublicKey("FnE6VJT5QNZdedZPnCoLsARgBwoE6DeJNjBs2H1gySX
 const MAGIC_PROGRAM = new PublicKey("Magic11111111111111111111111111111111111111");
 const MAGIC_CONTEXT = new PublicKey("MagicContext1111111111111111111111111111111");
 
+/** MagicBlock Ephemeral Rollup RPC endpoint */
+const ER_RPC_URL = "https://devnet.magicblock.app";
+
 const PROFILE_SEED = Buffer.from("profile");
 const POST_SEED = Buffer.from("post");
 const CHAT_SEED = Buffer.from("chat");
 const MESSAGE_SEED = Buffer.from("message");
 const FRIEND_SEED = Buffer.from("friends");
+const COMMENT_SEED = Buffer.from("comment");
+const REACTION_SEED = Buffer.from("reaction");
+const FRIEND_REQUEST_SEED = Buffer.from("freq");
+const CONVERSATION_SEED = Buffer.from("conversation");
+
+// ========== Simple In-Memory Cache ==========
+
+interface CacheEntry<T> {
+  data: T;
+  expiry: number;
+}
+
+class RpcCache {
+  private cache = new Map<string, CacheEntry<any>>();
+  private defaultTTL: number; // ms
+
+  constructor(ttlMs = 30_000) {
+    this.defaultTTL = ttlMs;
+  }
+
+  get<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiry) {
+      this.cache.delete(key);
+      return null;
+    }
+    return entry.data as T;
+  }
+
+  set<T>(key: string, data: T, ttlMs?: number): void {
+    this.cache.set(key, {
+      data,
+      expiry: Date.now() + (ttlMs ?? this.defaultTTL),
+    });
+  }
+
+  invalidate(keyPrefix?: string): void {
+    if (!keyPrefix) {
+      this.cache.clear();
+      return;
+    }
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(keyPrefix)) this.cache.delete(key);
+    }
+  }
+}
+
+/** Shared cache — 10s TTL. Cleared on write operations. */
+const rpcCache = new RpcCache(10_000);
+
+/** Clear all cached RPC data (call after tab switch, refresh, etc.) */
+export function clearRpcCache(): void {
+  rpcCache.invalidate();
+}
 
 // ========== Helpers ==========
 
@@ -57,6 +115,25 @@ function getFriendListPda(owner: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([FRIEND_SEED, owner.toBuffer()], PROGRAM_ID);
 }
 
+function getCommentPda(postPda: PublicKey, commentIndex: number): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([COMMENT_SEED, postPda.toBuffer(), toLEBytes(commentIndex)], PROGRAM_ID);
+}
+
+function getReactionPda(postPda: PublicKey, user: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([REACTION_SEED, postPda.toBuffer(), user.toBuffer()], PROGRAM_ID);
+}
+
+function getFriendRequestPda(from: PublicKey, to: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([FRIEND_REQUEST_SEED, from.toBuffer(), to.toBuffer()], PROGRAM_ID);
+}
+
+function getConversationPda(user1: PublicKey, user2: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [CONVERSATION_SEED, user1.toBuffer(), user2.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
 /** Permission PDA — derived by the Permission Program
  *  Seeds: ["permission:", permissioned_account] per MagicBlock SDK v0.8.0 */
 function getPermissionPda(permissionedAccount: PublicKey): [PublicKey, number] {
@@ -93,10 +170,21 @@ function getDelegationMetadataPda(pda: PublicKey): [PublicKey, number] {
 export class ShyftClient {
   program: Program;
   provider: AnchorProvider;
+  /** Program instance connected to MagicBlock Ephemeral Rollup */
+  erProgram: Program;
+  erConnection: Connection;
 
   constructor(provider: AnchorProvider) {
     this.provider = provider;
     this.program = new Program(idl as Idl, provider);
+    // Create a second Program instance pointing at the ER RPC
+    this.erConnection = new Connection(ER_RPC_URL, "confirmed");
+    const erProvider = new AnchorProvider(
+      this.erConnection,
+      provider.wallet,
+      { commitment: "confirmed" }
+    );
+    this.erProgram = new Program(idl as Idl, erProvider);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,23 +243,35 @@ export class ShyftClient {
       throw new Error("Wallet not connected - no public key available");
     }
 
-    // Debug logging
     console.log("=== Creating Post ===");
     console.log("Author:", author.toBase58());
     console.log("Post ID:", postId);
-    
-    // Let Anchor derive the PDAs - don't pass them explicitly
-    // The program constraints should handle the derivation
+
+    // If profile is still delegated to ER, undelegate first so we can use it
+    try {
+      const delegated = await this.isProfileDelegated();
+      if (delegated) {
+        console.log("⚠️ Profile delegated — undelegating before post...");
+        await this.undelegateProfile();
+        // Wait for undelegation to propagate
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    } catch (e: any) {
+      console.warn("Undelegate check/attempt failed:", e?.message?.slice(0, 80));
+    }
+
     try {
       const sig = await this.program.methods
         .createPost(new BN(postId), content, isPrivate)
-        .accounts({
+        .accountsPartial({
           author,
           systemProgram: SystemProgram.programId,
+          sessionToken: null as any,
         })
         .rpc();
       
       console.log("Post created successfully:", sig);
+      rpcCache.invalidate("allPosts");
       return sig;
     } catch (err: any) {
       console.error("Create post error:", err);
@@ -232,6 +332,10 @@ export class ShyftClient {
   /** Fetch ALL posts — both regular (owned by our program) and delegated (owned by delegation program).
    *  Delegated posts are decoded manually since Anchor's post.all() only returns our-program-owned accounts. */
   async getAllPostsIncludingDelegated(): Promise<{ publicKey: string; author: string; postId: string; content: string; isPrivate: boolean; likes: string; commentCount: string; createdAt: string; isDelegated: boolean }[]> {
+    const cacheKey = "allPostsDelegated";
+    const cached = rpcCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
     const coder = new BorshCoder(idl as Idl);
 
     // 1. Fetch regular (non-delegated) posts via Anchor (camelCase fields)
@@ -248,41 +352,27 @@ export class ShyftClient {
       isDelegated: false,
     }));
 
-    // 2. Fetch delegated posts (owned by delegation program, same data layout)
-    //    Filter by data size (Post accounts are 589 bytes: 8 discriminator + 581 data)
-    try {
-      const delegatedAccounts = await this.provider.connection.getProgramAccounts(
-        DELEGATION_PROGRAM_ID,
-        {
-          filters: [
-            { dataSize: 589 },
-          ],
-        }
-      );
+    // 2. Fetch delegated accounts (shared cache — used by messages too)
+    const delegatedAccounts = await this._getDelegated589Accounts();
 
-      console.log(`Found ${delegatedAccounts.length} delegated accounts (589 bytes)`);
-
-      for (const acc of delegatedAccounts) {
-        try {
-          // BorshCoder.accounts.decode uses capitalized name and returns snake_case fields
-          const decoded = coder.accounts.decode("Post", acc.account.data);
-          mapped.push({
-            publicKey: acc.pubkey.toBase58(),
-            author: decoded.author.toBase58(),
-            postId: decoded.post_id?.toString() || "0",
-            content: decoded.content || "",
-            isPrivate: decoded.is_private,
-            likes: decoded.likes?.toString() || "0",
-            commentCount: decoded.comment_count?.toString() || "0",
-            createdAt: decoded.created_at?.toString() || "0",
-            isDelegated: true,
-          });
-        } catch {
-          // Not a post account — skip (delegation program owns many account types)
-        }
+    for (const acc of delegatedAccounts) {
+      try {
+        // BorshCoder.accounts.decode uses capitalized name and returns snake_case fields
+        const decoded = coder.accounts.decode("Post", acc.account.data);
+        mapped.push({
+          publicKey: acc.pubkey.toBase58(),
+          author: decoded.author.toBase58(),
+          postId: decoded.post_id?.toString() || "0",
+          content: decoded.content || "",
+          isPrivate: decoded.is_private,
+          likes: decoded.likes?.toString() || "0",
+          commentCount: decoded.comment_count?.toString() || "0",
+          createdAt: decoded.created_at?.toString() || "0",
+          isDelegated: true,
+        });
+      } catch {
+        // Not a post account — skip (delegation program owns many account types)
       }
-    } catch (err) {
-      console.error("Failed to fetch delegated posts:", err);
     }
 
     // Deduplicate by publicKey (in case an account was just undelegated)
@@ -293,17 +383,45 @@ export class ShyftClient {
       return true;
     });
 
+    rpcCache.set(cacheKey, unique);
     return unique;
   }
 
+  /** Shared helper: fetch all delegated 589-byte accounts (used by posts, messages, payments).
+   *  Cached for 30s to avoid redundant getProgramAccounts calls. */
+  private async _getDelegated589Accounts(): Promise<readonly { pubkey: PublicKey; account: { data: Buffer } }[]> {
+    const cacheKey = "delegated589";
+    const cached = rpcCache.get<readonly { pubkey: PublicKey; account: { data: Buffer } }[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const accounts = await this.provider.connection.getProgramAccounts(
+        DELEGATION_PROGRAM_ID,
+        { filters: [{ dataSize: 589 }] }
+      );
+      console.log(`Found ${accounts.length} delegated accounts (589 bytes)`);
+      rpcCache.set(cacheKey, accounts);
+      return accounts;
+    } catch (err) {
+      console.error("Failed to fetch delegated 589 accounts:", err);
+      return [];
+    }
+  }
+
   async getAllProfiles(): Promise<any[]> {
+    const cacheKey = "allProfiles";
+    const cached = rpcCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
     try {
       const allProfiles = await this.accounts.profile.all();
-      return allProfiles.map((p: any) => ({
+      const result = allProfiles.map((p: any) => ({
         publicKey: p.publicKey.toBase58(),
         ...p.account,
         owner: p.account.owner.toBase58(),
       }));
+      rpcCache.set(cacheKey, result);
+      return result;
     } catch {
       return [];
     }
@@ -314,12 +432,114 @@ export class ShyftClient {
 
     const sig = await this.program.methods
       .likePost(new BN(postId))
-      .accounts({
+      .accountsPartial({
         post: postPda,
         user: this.provider.wallet.publicKey,
+        sessionToken: null as any,
       })
       .rpc();
     return sig;
+  }
+
+  // ========== COMMENTS ==========
+
+  async createComment(author: PublicKey, postId: number, commentIndex: number, content: string): Promise<string> {
+    const [postPda] = getPostPda(author, postId);
+    const [commentPda] = getCommentPda(postPda, commentIndex);
+
+    const sig = await this.program.methods
+      .createComment(new BN(postId), new BN(commentIndex), content)
+      .accountsPartial({
+        comment: commentPda,
+        post: postPda,
+        author: this.provider.wallet.publicKey,
+        systemProgram: SystemProgram.programId,
+        sessionToken: null as any,
+      })
+      .rpc();
+
+    // Invalidate caches so new comments show up
+    rpcCache.invalidate("allComments");
+    rpcCache.invalidate("allPostsDelegated");
+    return sig;
+  }
+
+  async getAllComments(): Promise<{ publicKey: string; post: string; author: string; commentIndex: string; content: string; createdAt: string }[]> {
+    const cacheKey = "allComments";
+    const cached = rpcCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const allComments = await this.accounts.comment.all();
+      const result = allComments.map((c: any) => ({
+        publicKey: c.publicKey.toBase58(),
+        post: c.account.post.toBase58(),
+        author: c.account.author.toBase58(),
+        commentIndex: c.account.commentIndex?.toString() || "0",
+        content: c.account.content || "",
+        createdAt: c.account.createdAt?.toString() || "0",
+      }));
+      rpcCache.set(cacheKey, result);
+      return result;
+    } catch (err) {
+      console.error("getAllComments error:", err);
+      return [];
+    }
+  }
+
+  async getCommentsForPost(postPublicKey: string): Promise<{ publicKey: string; post: string; author: string; commentIndex: string; content: string; createdAt: string }[]> {
+    const all = await this.getAllComments();
+    return all
+      .filter((c) => c.post === postPublicKey)
+      .sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
+  }
+
+  // ========== REACTIONS ==========
+
+  async reactToPost(author: PublicKey, postId: number, reactionType: number): Promise<string> {
+    const [postPda] = getPostPda(author, postId);
+    const [reactionPda] = getReactionPda(postPda, this.provider.wallet.publicKey);
+
+    const sig = await this.program.methods
+      .reactToPost(new BN(postId), reactionType)
+      .accountsPartial({
+        reaction: reactionPda,
+        post: postPda,
+        user: this.provider.wallet.publicKey,
+        systemProgram: SystemProgram.programId,
+        sessionToken: null as any,
+      })
+      .rpc();
+
+    rpcCache.invalidate("allReactions");
+    return sig;
+  }
+
+  async getAllReactions(): Promise<{ publicKey: string; post: string; user: string; reactionType: number; createdAt: string }[]> {
+    const cacheKey = "allReactions";
+    const cached = rpcCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const allReactions = await this.accounts.reaction.all();
+      const result = allReactions.map((r: any) => ({
+        publicKey: r.publicKey.toBase58(),
+        post: r.account.post.toBase58(),
+        user: r.account.user.toBase58(),
+        reactionType: r.account.reactionType,
+        createdAt: r.account.createdAt?.toString() || "0",
+      }));
+      rpcCache.set(cacheKey, result);
+      return result;
+    } catch (err) {
+      console.error("getAllReactions error:", err);
+      return [];
+    }
+  }
+
+  async getReactionsForPost(postPublicKey: string): Promise<{ publicKey: string; post: string; user: string; reactionType: number; createdAt: string }[]> {
+    const all = await this.getAllReactions();
+    return all.filter((r) => r.post === postPublicKey);
   }
 
   // ========== CHAT ==========
@@ -370,6 +590,10 @@ export class ShyftClient {
       .rpc();
     console.log("✅ Message sent on-chain:", sig);
 
+    // Invalidate message caches after sending
+    rpcCache.invalidate("messages:");
+    rpcCache.invalidate("allMessages");
+
     // Step 2: Create MagicBlock permission on the message PDA
     // Get the other participant from the chat
     try {
@@ -418,6 +642,10 @@ export class ShyftClient {
    *  Instead of scanning the entire delegation program (100K+ accounts),
    *  we check each friend's expected chat PDA directly. */
   async getAllChatsForUser(friendPubkeys: PublicKey[] = []): Promise<any[]> {
+    const cacheKey = "allChatsForUser";
+    const cached = rpcCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
     const coder = new BorshCoder(idl as Idl);
     const user = this.provider.wallet.publicKey;
     const userStr = user.toBase58();
@@ -471,22 +699,77 @@ export class ShyftClient {
 
     // Deduplicate
     const seen = new Set<string>();
-    return mapped.filter((c: any) => {
+    const result = mapped.filter((c: any) => {
       if (seen.has(c.publicKey)) return false;
       seen.add(c.publicKey);
       return true;
     });
+    rpcCache.set(cacheKey, result);
+    return result;
   }
 
   /** Fetch all messages for a specific chat (both regular and delegated). */
   async getMessagesForChat(chatId: number): Promise<any[]> {
+    const cacheKey = `messages:${chatId}`;
+    const cached = rpcCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
     const coder = new BorshCoder(idl as Idl);
     const chatIdStr = chatId.toString();
 
     // 1. Regular messages — fetch all and filter by chatId in JS
-    const allMessages = await this.accounts.message.all();
+    // Use cached allMessages if available
+    const allMessages = await this._getAllMessages();
     const mapped: any[] = allMessages
-      .map((m: any) => ({
+      .filter((m: any) => m.chatId === chatIdStr);
+
+    // 2. Delegated messages (589 bytes — same as Post! Decode as Message and filter by chatId)
+    const delegatedAccounts = await this._getDelegated589Accounts();
+    for (const acc of delegatedAccounts) {
+      try {
+        const decoded = coder.accounts.decode("Message", acc.account.data);
+        const msgChatId = decoded.chat_id?.toString() || "0";
+        if (msgChatId === chatIdStr) {
+          mapped.push({
+            publicKey: acc.pubkey.toBase58(),
+            chatId: msgChatId,
+            messageIndex: Number(decoded.message_index || 0),
+            sender: decoded.sender?.toBase58() || "",
+            content: decoded.content || "",
+            isPayment: decoded.is_payment || false,
+            paymentAmount: Number(decoded.payment_amount || 0),
+            timestamp: decoded.timestamp?.toString() || "0",
+            isDelegated: true,
+          });
+        }
+      } catch {
+        // Not a Message account (could be Post)
+      }
+    }
+
+    // Deduplicate and sort by message index
+    const seen = new Set<string>();
+    const result = mapped
+      .filter((m: any) => {
+        if (seen.has(m.publicKey)) return false;
+        seen.add(m.publicKey);
+        return true;
+      })
+      .sort((a: any, b: any) => a.messageIndex - b.messageIndex);
+
+    rpcCache.set(cacheKey, result, 15_000); // 15s cache for messages
+    return result;
+  }
+
+  /** Cached fetch of all message accounts (raw mapped). */
+  private async _getAllMessages(): Promise<any[]> {
+    const cacheKey = "allMessages";
+    const cached = rpcCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const allMessages = await this.accounts.message.all();
+      const mapped = allMessages.map((m: any) => ({
         publicKey: m.publicKey.toBase58(),
         chatId: m.account.chatId?.toString() || "0",
         messageIndex: Number(m.account.messageIndex || 0),
@@ -496,55 +779,16 @@ export class ShyftClient {
         paymentAmount: Number(m.account.paymentAmount || 0),
         timestamp: m.account.timestamp?.toString() || "0",
         isDelegated: false,
-      }))
-      .filter((m: any) => m.chatId === chatIdStr);
-
-    // 2. Delegated messages (589 bytes — same as Post! Decode as Message and filter by chatId)
-    try {
-      const delegatedAccounts = await this.provider.connection.getProgramAccounts(
-        DELEGATION_PROGRAM_ID,
-        {
-          filters: [{ dataSize: 589 }],
-        }
-      );
-      for (const acc of delegatedAccounts) {
-        try {
-          const decoded = coder.accounts.decode("Message", acc.account.data);
-          const msgChatId = decoded.chat_id?.toString() || "0";
-          if (msgChatId === chatIdStr) {
-            mapped.push({
-              publicKey: acc.pubkey.toBase58(),
-              chatId: msgChatId,
-              messageIndex: Number(decoded.message_index || 0),
-              sender: decoded.sender?.toBase58() || "",
-              content: decoded.content || "",
-              isPayment: decoded.is_payment || false,
-              paymentAmount: Number(decoded.payment_amount || 0),
-              timestamp: decoded.timestamp?.toString() || "0",
-              isDelegated: true,
-            });
-          }
-        } catch {
-          // Not a Message account (could be Post)
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch delegated messages:", err);
+      }));
+      rpcCache.set(cacheKey, mapped);
+      return mapped;
+    } catch {
+      return [];
     }
-
-    // Deduplicate and sort by message index
-    const seen = new Set<string>();
-    return mapped
-      .filter((m: any) => {
-        if (seen.has(m.publicKey)) return false;
-        seen.add(m.publicKey);
-        return true;
-      })
-      .sort((a: any, b: any) => a.messageIndex - b.messageIndex);
   }
 
   /** Fetch all payment messages across all chats involving the current user.
-   *  Scans both regular and delegated message accounts with isPayment=true. */
+   *  Uses cached message and delegated account data to minimize RPC calls. */
   async getAllPaymentsForUser(): Promise<any[]> {
     const coder = new BorshCoder(idl as Idl);
     const user = this.provider.wallet.publicKey;
@@ -570,68 +814,59 @@ export class ShyftClient {
 
     const payments: any[] = [];
 
-    // 2. Scan all regular messages — filter by user's chats and isPayment
-    const allMessages = await this.accounts.message.all();
+    // 2. Use cached messages instead of fetching fresh
+    const allMessages = await this._getAllMessages();
     for (const m of allMessages) {
-      const chatId = m.account.chatId?.toString() || "0";
-      if (!userChatIds.has(chatId)) continue;
-      if (!m.account.isPayment) continue;
+      if (!userChatIds.has(m.chatId)) continue;
+      if (!m.isPayment) continue;
 
-      const sender = m.account.sender?.toBase58() || "";
-      const isSent = sender === userStr;
+      const isSent = m.sender === userStr;
 
       payments.push({
-        id: m.publicKey.toBase58(),
-        sender: isSent ? "me" : sender,
-        recipient: isSent ? (chatParticipant[chatId] || "") : "me",
-        amount: Number(m.account.paymentAmount || 0) / 1_000_000, // micro-SOL -> SOL
+        id: m.publicKey,
+        sender: isSent ? "me" : m.sender,
+        recipient: isSent ? (chatParticipant[m.chatId] || "") : "me",
+        amount: Number(m.paymentAmount || 0) / 1_000_000, // micro-SOL -> SOL
         token: "SOL",
         status: "completed" as const,
         isPrivate: true,
-        timestamp: Number(m.account.timestamp?.toString() || "0") * 1000,
-        content: m.account.content || "",
+        timestamp: Number(m.timestamp || "0") * 1000,
+        content: m.content || "",
         isDelegated: false,
       });
     }
 
     // 3. Scan delegated messages (589 bytes) for payment messages in user's chats
-    try {
-      const delegatedAccounts = await this.provider.connection.getProgramAccounts(
-        DELEGATION_PROGRAM_ID,
-        { filters: [{ dataSize: 589 }] }
-      );
-      for (const acc of delegatedAccounts) {
-        try {
-          const decoded = coder.accounts.decode("Message", acc.account.data);
-          const chatId = decoded.chat_id?.toString() || "0";
-          if (!userChatIds.has(chatId)) continue;
-          if (!decoded.is_payment) continue;
+    const delegatedAccounts = await this._getDelegated589Accounts();
+    for (const acc of delegatedAccounts) {
+      try {
+        const decoded = coder.accounts.decode("Message", acc.account.data);
+        const chatId = decoded.chat_id?.toString() || "0";
+        if (!userChatIds.has(chatId)) continue;
+        if (!decoded.is_payment) continue;
 
-          const pubkey = acc.pubkey.toBase58();
-          // Skip if already found in regular
-          if (payments.find(p => p.id === pubkey)) continue;
+        const pubkey = acc.pubkey.toBase58();
+        // Skip if already found in regular
+        if (payments.find(p => p.id === pubkey)) continue;
 
-          const sender = decoded.sender?.toBase58() || "";
-          const isSent = sender === userStr;
+        const sender = decoded.sender?.toBase58() || "";
+        const isSent = sender === userStr;
 
-          payments.push({
-            id: pubkey,
-            sender: isSent ? "me" : sender,
-            recipient: isSent ? (chatParticipant[chatId] || "") : "me",
-            amount: Number(decoded.payment_amount || 0) / 1_000_000,
-            token: "SOL",
-            status: "completed" as const,
-            isPrivate: true,
-            timestamp: Number(decoded.timestamp?.toString() || "0") * 1000,
-            content: decoded.content || "",
-            isDelegated: true,
-          });
-        } catch {
-          // Not a Message account
-        }
+        payments.push({
+          id: pubkey,
+          sender: isSent ? "me" : sender,
+          recipient: isSent ? (chatParticipant[chatId] || "") : "me",
+          amount: Number(decoded.payment_amount || 0) / 1_000_000,
+          token: "SOL",
+          status: "completed" as const,
+          isPrivate: true,
+          timestamp: Number(decoded.timestamp?.toString() || "0") * 1000,
+          content: decoded.content || "",
+          isDelegated: true,
+        });
+      } catch {
+        // Not a Message account
       }
-    } catch (err) {
-      console.error("Failed to fetch delegated payment messages:", err);
     }
 
     // Sort by timestamp descending (newest first)
@@ -709,6 +944,7 @@ export class ShyftClient {
         user,
       })
       .rpc();
+    rpcCache.invalidate("friendList:");
     return sig;
   }
 
@@ -725,16 +961,134 @@ export class ShyftClient {
         user,
       })
       .rpc();
+    rpcCache.invalidate("friendList:");
     return sig;
   }
 
   async getFriendList(owner: PublicKey): Promise<any> {
+    const cacheKey = `friendList:${owner.toBase58()}`;
+    const cached = rpcCache.get<any>(cacheKey);
+    if (cached !== null) return cached;
+
     const [friendListPda] = getFriendListPda(owner);
     try {
-      return await this.accounts.friendList.fetch(friendListPda);
+      const result = await this.accounts.friendList.fetch(friendListPda);
+      rpcCache.set(cacheKey, result);
+      return result;
     } catch {
+      rpcCache.set(cacheKey, null, 15_000); // cache misses briefly too
       return null;
     }
+  }
+
+  // ========== FRIEND REQUESTS ==========
+
+  async sendFriendRequest(to: PublicKey): Promise<string> {
+    const from = this.provider.wallet.publicKey;
+    const [friendRequestPda] = getFriendRequestPda(from, to);
+
+    const sig = await this.program.methods
+      .sendFriendRequest()
+      .accounts({
+        friendRequest: friendRequestPda,
+        from,
+        to,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    rpcCache.invalidate("friendRequests");
+    return sig;
+  }
+
+  async acceptFriendRequest(from: PublicKey): Promise<string> {
+    const acceptor = this.provider.wallet.publicKey;
+    const [friendRequestPda] = getFriendRequestPda(from, acceptor);
+    const [acceptorFriendListPda] = getFriendListPda(acceptor);
+    const [senderFriendListPda] = getFriendListPda(from);
+    const [acceptorProfilePda] = getProfilePda(acceptor);
+    const [senderProfilePda] = getProfilePda(from);
+
+    // Both friend lists use init_if_needed on-chain now,
+    // so we don't need to pre-check or manually create them.
+    const sig = await this.program.methods
+      .acceptFriendRequest()
+      .accounts({
+        friendRequest: friendRequestPda,
+        acceptorFriendList: acceptorFriendListPda,
+        senderFriendList: senderFriendListPda,
+        acceptorProfile: acceptorProfilePda,
+        senderProfile: senderProfilePda,
+        acceptor,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    rpcCache.invalidate("friendRequests");
+    rpcCache.invalidate("friendList:");
+    return sig;
+  }
+
+  async rejectFriendRequest(from: PublicKey, to: PublicKey): Promise<string> {
+    const user = this.provider.wallet.publicKey;
+    const [friendRequestPda] = getFriendRequestPda(from, to);
+
+    const sig = await this.program.methods
+      .rejectFriendRequest()
+      .accounts({
+        friendRequest: friendRequestPda,
+        user,
+      })
+      .rpc();
+    rpcCache.invalidate("friendRequests");
+    return sig;
+  }
+
+  async getAllFriendRequests(): Promise<{ publicKey: string; from: string; to: string; status: number; createdAt: string }[]> {
+    const cacheKey = "friendRequests";
+    const cached = rpcCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const all = await this.accounts.friendRequest.all();
+      const result = all.map((r: any) => ({
+        publicKey: r.publicKey.toBase58(),
+        from: r.account.from.toBase58(),
+        to: r.account.to.toBase58(),
+        status: r.account.status,
+        createdAt: r.account.createdAt?.toString() || "0",
+      }));
+      rpcCache.set(cacheKey, result);
+      return result;
+    } catch (err) {
+      console.error("getAllFriendRequests error:", err);
+      return [];
+    }
+  }
+
+  async getIncomingRequests(userPubkey: PublicKey): Promise<{ publicKey: string; from: string; to: string; status: number; createdAt: string }[]> {
+    const all = await this.getAllFriendRequests();
+    const addr = userPubkey.toBase58();
+    return all.filter((r) => r.to === addr && r.status === 0);
+  }
+
+  async getOutgoingRequests(userPubkey: PublicKey): Promise<{ publicKey: string; from: string; to: string; status: number; createdAt: string }[]> {
+    const all = await this.getAllFriendRequests();
+    const addr = userPubkey.toBase58();
+    return all.filter((r) => r.from === addr && r.status === 0);
+  }
+
+  /** Search all profiles by username (partial match) */
+  async searchByUsername(query: string): Promise<{ owner: string; username: string; displayName: string }[]> {
+    const profiles = await this.getAllProfiles();
+    const q = query.toLowerCase().trim();
+    if (!q) return [];
+    return profiles
+      .filter((p: any) => p.username?.toLowerCase().includes(q) || p.displayName?.toLowerCase().includes(q))
+      .map((p: any) => ({
+        owner: p.owner,
+        username: p.username || "",
+        displayName: p.displayName || "",
+      }))
+      .slice(0, 10); // max 10 results
   }
 
   // ========== DELEGATION & PERMISSIONS ==========
@@ -815,6 +1169,379 @@ export class ShyftClient {
       })
       .rpc();
     return sig;
+  }
+
+  // ========== EPHEMERAL CONVERSATIONS (MagicBlock ER) ==========
+
+  /** Top up profile PDA with lamports to sponsor ephemeral conversations */
+  async topUpProfile(lamports: number): Promise<string> {
+    const user = this.provider.wallet.publicKey;
+    const [profilePda] = getProfilePda(user);
+    const sig = await this.program.methods
+      .topUpProfile(new BN(lamports))
+      .accounts({
+        profile: profilePda,
+        user,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    return sig;
+  }
+
+  /** Delegate user's profile PDA to the MagicBlock Ephemeral Rollup */
+  async delegateProfile(): Promise<string> {
+    const user = this.provider.wallet.publicKey;
+    const [profilePda] = getProfilePda(user);
+    const [bufferPda] = getDelegationBufferPda(profilePda);
+    const [delegationRecordPda] = getDelegationRecordPda(profilePda);
+    const [delegationMetadataPda] = getDelegationMetadataPda(profilePda);
+
+    const sig = await this.program.methods
+      .delegateProfile(null)
+      .accounts({
+        user,
+        profile: profilePda,
+        bufferPda,
+        delegationRecordPda,
+        delegationMetadataPda,
+        ownerProgram: PROGRAM_ID,
+        delegationProgram: DELEGATION_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log("✅ Profile delegated to ER:", sig);
+    return sig;
+  }
+
+  /** Get profile PDA lamport balance */
+  async getProfileBalance(): Promise<number> {
+    const user = this.provider.wallet.publicKey;
+    const [profilePda] = getProfilePda(user);
+    const info = await this.provider.connection.getAccountInfo(profilePda);
+    return info?.lamports ?? 0;
+  }
+
+  /** Combined: top-up (if needed) + delegate in a SINGLE transaction = 1 wallet prompt */
+  async topUpAndDelegateProfile(minLamports: number = 2_000_000): Promise<string> {
+    const user = this.provider.wallet.publicKey;
+    const [profilePda] = getProfilePda(user);
+    const [bufferPda] = getDelegationBufferPda(profilePda);
+    const [delegationRecordPda] = getDelegationRecordPda(profilePda);
+    const [delegationMetadataPda] = getDelegationMetadataPda(profilePda);
+
+    const tx = new Transaction();
+
+    // Check if profile needs funding
+    const balance = await this.getProfileBalance();
+    if (balance < minLamports) {
+      const needed = minLamports - balance;
+      const topUpIx = await this.program.methods
+        .topUpProfile(new BN(needed))
+        .accounts({
+          profile: profilePda,
+          user,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction();
+      tx.add(topUpIx);
+      console.log(`💰 Topping up profile with ${needed / 1e9} SOL (balance: ${balance / 1e9})`);
+    } else {
+      console.log(`💰 Profile already funded: ${balance / 1e9} SOL — skipping top-up`);
+    }
+
+    // Add delegate instruction
+    const delegateIx = await this.program.methods
+      .delegateProfile(null)
+      .accounts({
+        user,
+        profile: profilePda,
+        bufferPda,
+        delegationRecordPda,
+        delegationMetadataPda,
+        ownerProgram: PROGRAM_ID,
+        delegationProgram: DELEGATION_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+    tx.add(delegateIx);
+
+    const sig = await this.provider.sendAndConfirm(tx);
+    console.log("✅ Profile topped up & delegated in single TX:", sig);
+    return sig;
+  }
+
+  /** Undelegate user's profile PDA back to Solana */
+  async undelegateProfile(): Promise<string> {
+    const user = this.provider.wallet.publicKey;
+    const [profilePda] = getProfilePda(user);
+
+    const sig = await this.erProgram.methods
+      .undelegateProfile()
+      .accounts({
+        user,
+        profile: profilePda,
+        magicContext: MAGIC_CONTEXT,
+        magicProgram: MAGIC_PROGRAM,
+      })
+      .rpc({ skipPreflight: true });
+    console.log("✅ Profile undelegated:", sig);
+    return sig;
+  }
+
+  /** Create an ephemeral conversation in the ER.
+   *  The caller's profile PDA must already be delegated to the ER. */
+  async createConversation(otherUser: PublicKey, messageCapacity = 0): Promise<string> {
+    const user = this.provider.wallet.publicKey;
+    const [profileOwnerPda] = getProfilePda(user);
+    const [profileOtherPda] = getProfilePda(otherUser);
+    const [conversationPda] = getConversationPda(user, otherUser);
+
+    const sig = await this.erProgram.methods
+      .createConversation(messageCapacity)
+      .accounts({
+        authority: user,
+        profileOwner: profileOwnerPda,
+        profileOther: profileOtherPda,
+        conversation: conversationPda,
+      })
+      .rpc({ skipPreflight: true });
+    console.log(`✅ Ephemeral conversation created (capacity=${messageCapacity}):`, sig);
+    return sig;
+  }
+
+  /** Extend an ephemeral conversation's capacity */
+  async extendConversation(otherUser: PublicKey, additionalMessages: number): Promise<string> {
+    const user = this.provider.wallet.publicKey;
+    const [profileSenderPda] = getProfilePda(user);
+    const [profileOtherPda] = getProfilePda(otherUser);
+    const [conversationPda] = getConversationPda(user, otherUser);
+
+    const sig = await this.erProgram.methods
+      .extendConversation(additionalMessages)
+      .accounts({
+        authority: user,
+        profileSender: profileSenderPda,
+        profileOther: profileOtherPda,
+        conversation: conversationPda,
+      })
+      .rpc({ skipPreflight: true });
+    console.log("✅ Conversation extended:", sig);
+    return sig;
+  }
+
+  /** Send a message in an ephemeral conversation (FREE — runs inside ER) */
+  async appendMessage(otherUser: PublicKey, body: string): Promise<string> {
+    const user = this.provider.wallet.publicKey;
+    // Try both orderings of the conversation PDA
+    // Min size for 1 message: 8 + 69 + 324 = 401 (280-char messages)
+    const MIN_USABLE_SIZE = 401;
+    let conversationPda: PublicKey | undefined;
+    for (const [a, b] of [[user, otherUser], [otherUser, user]] as [PublicKey, PublicKey][]) {
+      const [pda] = getConversationPda(a, b);
+      try {
+        const info = await this.erConnection.getAccountInfo(pda);
+        if (info && info.data.length >= MIN_USABLE_SIZE) {
+          conversationPda = pda;
+          console.log("📍 Found conversation PDA:", pda.toBase58(), "size:", info.data.length);
+          break;
+        } else if (info && info.data.length > 0) {
+          console.warn(`⚠️ Stale conversation at ${pda.toBase58()} — only ${info.data.length} bytes (need ${MIN_USABLE_SIZE}+)`);
+        }
+      } catch { /* try next ordering */ }
+    }
+
+    if (!conversationPda) {
+      throw new Error("AccountNotFound: Ephemeral conversation does not exist on ER. It may have expired or is too small.");
+    }
+
+    try {
+      const sig = await this.erProgram.methods
+        .appendMessage(body)
+        .accounts({
+          sender: user,
+          conversation: conversationPda,
+        })
+        .rpc({ skipPreflight: true });
+      console.log("✅ Message appended:", sig);
+      return sig;
+    } catch (err: any) {
+      // Extract full error details
+      console.error("❌ appendMessage RPC error:", JSON.stringify({
+        message: err?.message?.slice(0, 200),
+        code: err?.code,
+        errorCode: err?.error?.errorCode,
+        errorMessage: err?.error?.errorMessage,
+        logs: err?.logs || err?.error?.logs,
+      }, null, 2));
+      throw err;
+    }
+  }
+
+  /** Close an ephemeral conversation — tries both PDA orderings to find the right one */
+  async closeConversation(otherUser: PublicKey): Promise<string> {
+    const user = this.provider.wallet.publicKey;
+    const [profileOwnerPda] = getProfilePda(user);
+    const [profileOtherPda] = getProfilePda(otherUser);
+    const [conversationPda] = getConversationPda(user, otherUser);
+
+    // Check if conversation exists at the primary ordering
+    const info = await this.erConnection.getAccountInfo(conversationPda);
+    if (info && info.data.length > 0) {
+      const sig = await this.erProgram.methods
+        .closeConversation()
+        .accounts({
+          authority: user,
+          profileOwner: profileOwnerPda,
+          profileOther: profileOtherPda,
+          conversation: conversationPda,
+        })
+        .rpc({ skipPreflight: true });
+      console.log("✅ Conversation closed:", sig);
+      return sig;
+    }
+
+    // Check reverse ordering — but on-chain the authority must match profileOwner,
+    // so we still pass our profile as profileOwner. The seeds just derive differently.
+    const [conversationPdaReverse] = getConversationPda(otherUser, user);
+    const infoReverse = await this.erConnection.getAccountInfo(conversationPdaReverse);
+    if (infoReverse && infoReverse.data.length > 0) {
+      // The reverse conv was created by the other user. We can't close it (authority mismatch).
+      // Just log a warning — we'll extend it instead.
+      console.warn("⚠️ Conversation found at reverse PDA (created by other user) — cannot close, will extend instead");
+      throw new Error("Cannot close conversation created by other user");
+    }
+
+    throw new Error("No conversation found to close");
+  }
+
+  /** Fetch conversation messages from the ER.
+   *  Returns parsed messages array or empty if no conversation exists. */
+  async getConversationMessages(user1: PublicKey, user2: PublicKey): Promise<{sender: string; body: string; timestamp: number}[]> {
+    // Try both orderings
+    for (const [a, b] of [[user1, user2], [user2, user1]]) {
+      const [conversationPda] = getConversationPda(a, b);
+      try {
+        const account = await (this.erProgram.account as any).conversation.fetch(conversationPda);
+        if (account) {
+          const msgs = (account.messages as any[]) || [];
+          return msgs.map((m: any) => ({
+            sender: m.sender.toBase58(),
+            body: m.body,
+            timestamp: Number(m.timestamp || 0),
+          }));
+        }
+      } catch {
+        // Try other ordering
+      }
+    }
+    return [];
+  }
+
+  /** Check if an ephemeral conversation with usable capacity exists */
+  async conversationExists(user1: PublicKey, user2: PublicKey): Promise<boolean> {
+    // Minimum size for at least 1 message: 8 (discriminator) + 69 (base) + 324 (1 msg) = 401
+    const MIN_USABLE_SIZE = 401;
+    for (const [a, b] of [[user1, user2], [user2, user1]]) {
+      const [conversationPda] = getConversationPda(a, b);
+      try {
+        const info = await this.erConnection.getAccountInfo(conversationPda);
+        if (info && info.data.length >= MIN_USABLE_SIZE) return true;
+        if (info && info.data.length > 0) {
+          console.warn(`⚠️ Stale conversation found (${info.data.length} bytes, need ${MIN_USABLE_SIZE}+)`);
+        }
+      } catch { /* skip */ }
+    }
+    return false;
+  }
+
+  /** Check if a stale (too-small) conversation exists that needs to be cleaned up */
+  async findStaleConversation(user1: PublicKey, user2: PublicKey): Promise<PublicKey | null> {
+    const MIN_USABLE_SIZE = 401;
+    for (const [a, b] of [[user1, user2], [user2, user1]] as [PublicKey, PublicKey][]) {
+      const [pda] = getConversationPda(a, b);
+      try {
+        const info = await this.erConnection.getAccountInfo(pda);
+        if (info && info.data.length > 0 && info.data.length < MIN_USABLE_SIZE) {
+          return pda;
+        }
+      } catch { /* skip */ }
+    }
+    return null;
+  }
+
+  /** Subscribe to real-time conversation updates via ER websocket */
+  onConversationChange(
+    user1: PublicKey,
+    user2: PublicKey,
+    callback: (messages: {sender: string; body: string; timestamp: number}[]) => void
+  ): number | null {
+    const coder = new BorshCoder(idl as Idl);
+    // Try primary ordering first
+    const [conversationPda] = getConversationPda(user1, user2);
+    try {
+      const subId = this.erConnection.onAccountChange(
+        conversationPda,
+        (accountInfo) => {
+          try {
+            const decoded = coder.accounts.decode("conversation", accountInfo.data);
+            const msgs = (decoded.messages as any[]) || [];
+            callback(msgs.map((m: any) => ({
+              sender: m.sender.toBase58(),
+              body: m.body,
+              timestamp: Number(m.timestamp || 0),
+            })));
+          } catch {
+            // Ignore decode failures — happens during initial account write
+          }
+        },
+        "confirmed"
+      );
+      return subId;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Unsubscribe from conversation updates */
+  removeConversationListener(subscriptionId: number): void {
+    this.erConnection.removeAccountChangeListener(subscriptionId);
+  }
+
+  /** Check if the user's profile is currently delegated to the ER */
+  async isProfileDelegated(): Promise<boolean> {
+    const user = this.provider.wallet.publicKey;
+    const [profilePda] = getProfilePda(user);
+    try {
+      const info = await this.provider.connection.getAccountInfo(profilePda);
+      if (!info) return false;
+      return info.owner.equals(DELEGATION_PROGRAM_ID);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Poll the ER until the user's profile account is available there.
+   *  This ensures the delegated account has been picked up by the ER
+   *  before we try to create ephemeral conversations that depend on it. */
+  async waitForProfileOnER(timeoutMs = 8000): Promise<void> {
+    const user = this.provider.wallet.publicKey;
+    const [profilePda] = getProfilePda(user);
+    const start = Date.now();
+    const interval = 1000;
+
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const info = await this.erConnection.getAccountInfo(profilePda);
+        if (info && info.data.length > 0) {
+          console.log("✅ Profile found on ER after", Date.now() - start, "ms");
+          return;
+        }
+      } catch {
+        // ER might not have it yet
+      }
+      await new Promise(r => setTimeout(r, interval));
+    }
+    console.warn("⚠️ Profile not found on ER after timeout — proceeding anyway");
   }
 
   // ========== HELPER: Full private post flow ==========
@@ -929,6 +1656,8 @@ export {
   getDelegationBufferPda,
   getDelegationRecordPda,
   getDelegationMetadataPda,
+  getFriendRequestPda,
+  getConversationPda,
   toLEBytes,
   PROGRAM_ID,
   PERMISSION_PROGRAM_ID,
@@ -936,4 +1665,5 @@ export {
   TEE_VALIDATOR,
   MAGIC_PROGRAM,
   MAGIC_CONTEXT,
+  ER_RPC_URL,
 };

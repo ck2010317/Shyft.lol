@@ -1,4 +1,10 @@
-{
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/shadowspace.json`.
+ */
+export type Shadowspace = {
   "address": "EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ",
   "metadata": {
     "name": "shadowspace",
@@ -8,7 +14,7 @@
   },
   "instructions": [
     {
-      "name": "accept_friend_request",
+      "name": "acceptFriendRequest",
       "discriminator": [
         54,
         73,
@@ -21,7 +27,7 @@
       ],
       "accounts": [
         {
-          "name": "friend_request",
+          "name": "friendRequest",
           "writable": true,
           "pda": {
             "seeds": [
@@ -37,7 +43,7 @@
               {
                 "kind": "account",
                 "path": "friend_request.from",
-                "account": "FriendRequest"
+                "account": "friendRequest"
               },
               {
                 "kind": "account",
@@ -47,7 +53,7 @@
           }
         },
         {
-          "name": "acceptor_friend_list",
+          "name": "acceptorFriendList",
           "writable": true,
           "pda": {
             "seeds": [
@@ -71,7 +77,7 @@
           }
         },
         {
-          "name": "sender_friend_list",
+          "name": "senderFriendList",
           "writable": true,
           "pda": {
             "seeds": [
@@ -90,13 +96,13 @@
               {
                 "kind": "account",
                 "path": "friend_request.from",
-                "account": "FriendRequest"
+                "account": "friendRequest"
               }
             ]
           }
         },
         {
-          "name": "acceptor_profile",
+          "name": "acceptorProfile",
           "writable": true,
           "pda": {
             "seeds": [
@@ -120,7 +126,7 @@
           }
         },
         {
-          "name": "sender_profile",
+          "name": "senderProfile",
           "writable": true,
           "pda": {
             "seeds": [
@@ -139,7 +145,7 @@
               {
                 "kind": "account",
                 "path": "friend_request.from",
-                "account": "FriendRequest"
+                "account": "friendRequest"
               }
             ]
           }
@@ -150,14 +156,14 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
-      "name": "add_friend",
+      "name": "addFriend",
       "discriminator": [
         6,
         45,
@@ -170,7 +176,7 @@
       ],
       "accounts": [
         {
-          "name": "friend_list",
+          "name": "friendList",
           "writable": true,
           "pda": {
             "seeds": [
@@ -231,7 +237,7 @@
       ]
     },
     {
-      "name": "append_message",
+      "name": "appendMessage",
       "docs": [
         "Append a message — runs inside ER, FREE"
       ],
@@ -263,7 +269,7 @@
       ]
     },
     {
-      "name": "close_conversation",
+      "name": "closeConversation",
       "docs": [
         "Close an ephemeral conversation"
       ],
@@ -284,7 +290,7 @@
           "signer": true
         },
         {
-          "name": "profile_owner",
+          "name": "profileOwner",
           "writable": true,
           "pda": {
             "seeds": [
@@ -303,13 +309,13 @@
               {
                 "kind": "account",
                 "path": "profile_owner.owner",
-                "account": "Profile"
+                "account": "profile"
               }
             ]
           }
         },
         {
-          "name": "profile_other",
+          "name": "profileOther",
           "pda": {
             "seeds": [
               {
@@ -327,7 +333,7 @@
               {
                 "kind": "account",
                 "path": "profile_other.owner",
-                "account": "Profile"
+                "account": "profile"
               }
             ]
           }
@@ -357,12 +363,12 @@
               {
                 "kind": "account",
                 "path": "profile_owner.owner",
-                "account": "Profile"
+                "account": "profile"
               },
               {
                 "kind": "account",
                 "path": "profile_other.owner",
-                "account": "Profile"
+                "account": "profile"
               }
             ]
           }
@@ -373,14 +379,14 @@
           "address": "MagicVau1t999999999999999999999999999999999"
         },
         {
-          "name": "magic_program",
+          "name": "magicProgram",
           "address": "Magic11111111111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
-      "name": "create_chat",
+      "name": "createChat",
       "discriminator": [
         133,
         186,
@@ -408,7 +414,7 @@
               },
               {
                 "kind": "arg",
-                "path": "chat_id"
+                "path": "chatId"
               }
             ]
           }
@@ -422,19 +428,19 @@
           "name": "user2"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "chat_id",
+          "name": "chatId",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "create_comment",
+      "name": "createComment",
       "discriminator": [
         236,
         232,
@@ -469,7 +475,7 @@
               },
               {
                 "kind": "arg",
-                "path": "comment_index"
+                "path": "commentIndex"
               }
             ]
           }
@@ -491,11 +497,11 @@
               {
                 "kind": "account",
                 "path": "post.author",
-                "account": "Post"
+                "account": "post"
               },
               {
                 "kind": "arg",
-                "path": "post_id"
+                "path": "postId"
               }
             ]
           }
@@ -506,21 +512,21 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
         {
-          "name": "session_token",
+          "name": "sessionToken",
           "optional": true
         }
       ],
       "args": [
         {
-          "name": "_post_id",
+          "name": "postId",
           "type": "u64"
         },
         {
-          "name": "comment_index",
+          "name": "commentIndex",
           "type": "u64"
         },
         {
@@ -530,11 +536,10 @@
       ]
     },
     {
-      "name": "create_conversation",
+      "name": "createConversation",
       "docs": [
         "Create an ephemeral conversation inside MagicBlock ER.",
-        "Profile PDA sponsors the account rent inside the rollup.",
-        "`message_capacity` — pre-allocate space for this many messages (avoids realloc)."
+        "Profile PDA sponsors the account rent inside the rollup."
       ],
       "discriminator": [
         30,
@@ -553,7 +558,7 @@
           "signer": true
         },
         {
-          "name": "profile_owner",
+          "name": "profileOwner",
           "writable": true,
           "pda": {
             "seeds": [
@@ -572,13 +577,13 @@
               {
                 "kind": "account",
                 "path": "profile_owner.owner",
-                "account": "Profile"
+                "account": "profile"
               }
             ]
           }
         },
         {
-          "name": "profile_other",
+          "name": "profileOther",
           "pda": {
             "seeds": [
               {
@@ -596,7 +601,7 @@
               {
                 "kind": "account",
                 "path": "profile_other.owner",
-                "account": "Profile"
+                "account": "profile"
               }
             ]
           }
@@ -626,12 +631,12 @@
               {
                 "kind": "account",
                 "path": "profile_owner.owner",
-                "account": "Profile"
+                "account": "profile"
               },
               {
                 "kind": "account",
                 "path": "profile_other.owner",
-                "account": "Profile"
+                "account": "profile"
               }
             ]
           }
@@ -642,19 +647,14 @@
           "address": "MagicVau1t999999999999999999999999999999999"
         },
         {
-          "name": "magic_program",
+          "name": "magicProgram",
           "address": "Magic11111111111111111111111111111111111111"
         }
       ],
-      "args": [
-        {
-          "name": "message_capacity",
-          "type": "u32"
-        }
-      ]
+      "args": []
     },
     {
-      "name": "create_friend_list",
+      "name": "createFriendList",
       "discriminator": [
         210,
         132,
@@ -667,7 +667,7 @@
       ],
       "accounts": [
         {
-          "name": "friend_list",
+          "name": "friendList",
           "writable": true,
           "pda": {
             "seeds": [
@@ -696,14 +696,14 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
-      "name": "create_permission",
+      "name": "createPermission",
       "discriminator": [
         190,
         182,
@@ -716,7 +716,7 @@
       ],
       "accounts": [
         {
-          "name": "permissioned_account"
+          "name": "permissionedAccount"
         },
         {
           "name": "permission",
@@ -728,20 +728,20 @@
           "signer": true
         },
         {
-          "name": "permission_program",
+          "name": "permissionProgram",
           "address": "ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "account_type",
+          "name": "accountType",
           "type": {
             "defined": {
-              "name": "AccountType"
+              "name": "accountType"
             }
           }
         },
@@ -751,7 +751,7 @@
             "option": {
               "vec": {
                 "defined": {
-                  "name": "Member"
+                  "name": "member"
                 }
               }
             }
@@ -760,7 +760,7 @@
       ]
     },
     {
-      "name": "create_post",
+      "name": "createPost",
       "discriminator": [
         123,
         92,
@@ -792,7 +792,7 @@
               },
               {
                 "kind": "arg",
-                "path": "post_id"
+                "path": "postId"
               }
             ]
           }
@@ -827,17 +827,17 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
         {
-          "name": "session_token",
+          "name": "sessionToken",
           "optional": true
         }
       ],
       "args": [
         {
-          "name": "post_id",
+          "name": "postId",
           "type": "u64"
         },
         {
@@ -845,13 +845,13 @@
           "type": "string"
         },
         {
-          "name": "is_private",
+          "name": "isPrivate",
           "type": "bool"
         }
       ]
     },
     {
-      "name": "create_profile",
+      "name": "createProfile",
       "discriminator": [
         225,
         205,
@@ -893,7 +893,7 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -903,7 +903,7 @@
           "type": "string"
         },
         {
-          "name": "display_name",
+          "name": "displayName",
           "type": "string"
         },
         {
@@ -913,7 +913,7 @@
       ]
     },
     {
-      "name": "delegate_pda",
+      "name": "delegatePda",
       "discriminator": [
         248,
         217,
@@ -926,7 +926,7 @@
       ],
       "accounts": [
         {
-          "name": "buffer_pda",
+          "name": "bufferPda",
           "writable": true,
           "pda": {
             "seeds": [
@@ -986,7 +986,7 @@
           }
         },
         {
-          "name": "delegation_record_pda",
+          "name": "delegationRecordPda",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1012,12 +1012,12 @@
             ],
             "program": {
               "kind": "account",
-              "path": "delegation_program"
+              "path": "delegationProgram"
             }
           }
         },
         {
-          "name": "delegation_metadata_pda",
+          "name": "delegationMetadataPda",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1052,7 +1052,7 @@
             ],
             "program": {
               "kind": "account",
-              "path": "delegation_program"
+              "path": "delegationProgram"
             }
           }
         },
@@ -1065,31 +1065,31 @@
           "signer": true
         },
         {
-          "name": "owner_program",
+          "name": "ownerProgram",
           "address": "EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ"
         },
         {
-          "name": "delegation_program",
+          "name": "delegationProgram",
           "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "account_type",
+          "name": "accountType",
           "type": {
             "defined": {
-              "name": "AccountType"
+              "name": "accountType"
             }
           }
         }
       ]
     },
     {
-      "name": "delegate_profile",
+      "name": "delegateProfile",
       "docs": [
         "Delegate profile to MagicBlock ER"
       ],
@@ -1110,7 +1110,7 @@
           "signer": true
         },
         {
-          "name": "buffer_profile",
+          "name": "bufferProfile",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1170,7 +1170,7 @@
           }
         },
         {
-          "name": "delegation_record_profile",
+          "name": "delegationRecordProfile",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1196,12 +1196,12 @@
             ],
             "program": {
               "kind": "account",
-              "path": "delegation_program"
+              "path": "delegationProgram"
             }
           }
         },
         {
-          "name": "delegation_metadata_profile",
+          "name": "delegationMetadataProfile",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1236,7 +1236,7 @@
             ],
             "program": {
               "kind": "account",
-              "path": "delegation_program"
+              "path": "delegationProgram"
             }
           }
         },
@@ -1260,21 +1260,21 @@
               {
                 "kind": "account",
                 "path": "profile.owner",
-                "account": "Profile"
+                "account": "profile"
               }
             ]
           }
         },
         {
-          "name": "owner_program",
+          "name": "ownerProgram",
           "address": "EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ"
         },
         {
-          "name": "delegation_program",
+          "name": "delegationProgram",
           "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -1288,7 +1288,7 @@
       ]
     },
     {
-      "name": "extend_conversation",
+      "name": "extendConversation",
       "docs": [
         "Extend conversation capacity"
       ],
@@ -1309,7 +1309,7 @@
           "signer": true
         },
         {
-          "name": "profile_sender",
+          "name": "profileSender",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1328,13 +1328,13 @@
               {
                 "kind": "account",
                 "path": "profile_sender.owner",
-                "account": "Profile"
+                "account": "profile"
               }
             ]
           }
         },
         {
-          "name": "profile_other",
+          "name": "profileOther",
           "pda": {
             "seeds": [
               {
@@ -1352,7 +1352,7 @@
               {
                 "kind": "account",
                 "path": "profile_other.owner",
-                "account": "Profile"
+                "account": "profile"
               }
             ]
           }
@@ -1382,12 +1382,12 @@
               {
                 "kind": "account",
                 "path": "profile_sender.owner",
-                "account": "Profile"
+                "account": "profile"
               },
               {
                 "kind": "account",
                 "path": "profile_other.owner",
-                "account": "Profile"
+                "account": "profile"
               }
             ]
           }
@@ -1398,19 +1398,19 @@
           "address": "MagicVau1t999999999999999999999999999999999"
         },
         {
-          "name": "magic_program",
+          "name": "magicProgram",
           "address": "Magic11111111111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "additional_messages",
+          "name": "additionalMessages",
           "type": "u32"
         }
       ]
     },
     {
-      "name": "like_post",
+      "name": "likePost",
       "discriminator": [
         45,
         242,
@@ -1439,11 +1439,11 @@
               {
                 "kind": "account",
                 "path": "post.author",
-                "account": "Post"
+                "account": "post"
               },
               {
                 "kind": "arg",
-                "path": "post_id"
+                "path": "postId"
               }
             ]
           }
@@ -1453,19 +1453,19 @@
           "signer": true
         },
         {
-          "name": "session_token",
+          "name": "sessionToken",
           "optional": true
         }
       ],
       "args": [
         {
-          "name": "_post_id",
+          "name": "postId",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "process_undelegation",
+      "name": "processUndelegation",
       "discriminator": [
         196,
         28,
@@ -1478,7 +1478,7 @@
       ],
       "accounts": [
         {
-          "name": "base_account",
+          "name": "baseAccount",
           "writable": true
         },
         {
@@ -1489,12 +1489,12 @@
           "writable": true
         },
         {
-          "name": "system_program"
+          "name": "systemProgram"
         }
       ],
       "args": [
         {
-          "name": "account_seeds",
+          "name": "accountSeeds",
           "type": {
             "vec": "bytes"
           }
@@ -1502,7 +1502,7 @@
       ]
     },
     {
-      "name": "react_to_post",
+      "name": "reactToPost",
       "discriminator": [
         186,
         193,
@@ -1559,11 +1559,11 @@
               {
                 "kind": "account",
                 "path": "post.author",
-                "account": "Post"
+                "account": "post"
               },
               {
                 "kind": "arg",
-                "path": "post_id"
+                "path": "postId"
               }
             ]
           }
@@ -1574,27 +1574,27 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
         {
-          "name": "session_token",
+          "name": "sessionToken",
           "optional": true
         }
       ],
       "args": [
         {
-          "name": "_post_id",
+          "name": "postId",
           "type": "u64"
         },
         {
-          "name": "reaction_type",
+          "name": "reactionType",
           "type": "u8"
         }
       ]
     },
     {
-      "name": "reject_friend_request",
+      "name": "rejectFriendRequest",
       "discriminator": [
         243,
         76,
@@ -1607,7 +1607,7 @@
       ],
       "accounts": [
         {
-          "name": "friend_request",
+          "name": "friendRequest",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1623,12 +1623,12 @@
               {
                 "kind": "account",
                 "path": "friend_request.from",
-                "account": "FriendRequest"
+                "account": "friendRequest"
               },
               {
                 "kind": "account",
                 "path": "friend_request.to",
-                "account": "FriendRequest"
+                "account": "friendRequest"
               }
             ]
           }
@@ -1641,7 +1641,7 @@
       "args": []
     },
     {
-      "name": "remove_friend",
+      "name": "removeFriend",
       "discriminator": [
         20,
         242,
@@ -1654,7 +1654,7 @@
       ],
       "accounts": [
         {
-          "name": "friend_list",
+          "name": "friendList",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1715,7 +1715,7 @@
       ]
     },
     {
-      "name": "send_friend_request",
+      "name": "sendFriendRequest",
       "discriminator": [
         26,
         246,
@@ -1728,7 +1728,7 @@
       ],
       "accounts": [
         {
-          "name": "friend_request",
+          "name": "friendRequest",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1761,14 +1761,14 @@
           "name": "to"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
-      "name": "send_message",
+      "name": "sendMessage",
       "discriminator": [
         57,
         40,
@@ -1799,11 +1799,11 @@
               },
               {
                 "kind": "arg",
-                "path": "chat_id"
+                "path": "chatId"
               },
               {
                 "kind": "arg",
-                "path": "message_index"
+                "path": "messageIndex"
               }
             ]
           }
@@ -1824,7 +1824,7 @@
               },
               {
                 "kind": "arg",
-                "path": "chat_id"
+                "path": "chatId"
               }
             ]
           }
@@ -1835,17 +1835,17 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "chat_id",
+          "name": "chatId",
           "type": "u64"
         },
         {
-          "name": "message_index",
+          "name": "messageIndex",
           "type": "u64"
         },
         {
@@ -1853,17 +1853,17 @@
           "type": "string"
         },
         {
-          "name": "is_payment",
+          "name": "isPayment",
           "type": "bool"
         },
         {
-          "name": "payment_amount",
+          "name": "paymentAmount",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "top_up_profile",
+      "name": "topUpProfile",
       "docs": [
         "Top up profile with lamports (to sponsor ephemeral conversations)"
       ],
@@ -1908,7 +1908,7 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -1942,11 +1942,11 @@
           "writable": true
         },
         {
-          "name": "magic_program",
+          "name": "magicProgram",
           "address": "Magic11111111111111111111111111111111111111"
         },
         {
-          "name": "magic_context",
+          "name": "magicContext",
           "writable": true,
           "address": "MagicContext1111111111111111111111111111111"
         }
@@ -1954,7 +1954,7 @@
       "args": []
     },
     {
-      "name": "undelegate_profile",
+      "name": "undelegateProfile",
       "docs": [
         "Undelegate profile back to Solana"
       ],
@@ -1994,17 +1994,17 @@
               {
                 "kind": "account",
                 "path": "profile.owner",
-                "account": "Profile"
+                "account": "profile"
               }
             ]
           }
         },
         {
-          "name": "magic_program",
+          "name": "magicProgram",
           "address": "Magic11111111111111111111111111111111111111"
         },
         {
-          "name": "magic_context",
+          "name": "magicContext",
           "writable": true,
           "address": "MagicContext1111111111111111111111111111111"
         }
@@ -2012,7 +2012,7 @@
       "args": []
     },
     {
-      "name": "update_profile_privacy",
+      "name": "updateProfilePrivacy",
       "discriminator": [
         1,
         223,
@@ -2058,13 +2058,13 @@
           "writable": true
         },
         {
-          "name": "permission_program",
+          "name": "permissionProgram",
           "address": "ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1"
         }
       ],
       "args": [
         {
-          "name": "is_private",
+          "name": "isPrivate",
           "type": "bool"
         }
       ]
@@ -2072,7 +2072,7 @@
   ],
   "accounts": [
     {
-      "name": "Chat",
+      "name": "chat",
       "discriminator": [
         170,
         4,
@@ -2085,7 +2085,7 @@
       ]
     },
     {
-      "name": "Comment",
+      "name": "comment",
       "discriminator": [
         150,
         135,
@@ -2098,7 +2098,7 @@
       ]
     },
     {
-      "name": "Conversation",
+      "name": "conversation",
       "discriminator": [
         171,
         46,
@@ -2111,7 +2111,7 @@
       ]
     },
     {
-      "name": "FriendList",
+      "name": "friendList",
       "discriminator": [
         97,
         237,
@@ -2124,7 +2124,7 @@
       ]
     },
     {
-      "name": "FriendRequest",
+      "name": "friendRequest",
       "discriminator": [
         110,
         87,
@@ -2137,7 +2137,7 @@
       ]
     },
     {
-      "name": "Message",
+      "name": "message",
       "discriminator": [
         110,
         151,
@@ -2150,7 +2150,7 @@
       ]
     },
     {
-      "name": "Post",
+      "name": "post",
       "discriminator": [
         8,
         147,
@@ -2163,7 +2163,7 @@
       ]
     },
     {
-      "name": "Profile",
+      "name": "profile",
       "discriminator": [
         184,
         101,
@@ -2176,7 +2176,7 @@
       ]
     },
     {
-      "name": "Reaction",
+      "name": "reaction",
       "discriminator": [
         226,
         61,
@@ -2189,7 +2189,7 @@
       ]
     },
     {
-      "name": "SessionToken",
+      "name": "sessionToken",
       "discriminator": [
         233,
         4,
@@ -2205,53 +2205,53 @@
   "errors": [
     {
       "code": 6000,
-      "name": "AlreadyFriends",
+      "name": "alreadyFriends",
       "msg": "Already friends with this user"
     },
     {
       "code": 6001,
-      "name": "NotFriends",
+      "name": "notFriends",
       "msg": "Not friends with this user"
     },
     {
       "code": 6002,
-      "name": "Unauthorized",
-      "msg": "Unauthorized"
+      "name": "unauthorized",
+      "msg": "unauthorized"
     },
     {
       "code": 6003,
-      "name": "ContentTooLong",
+      "name": "contentTooLong",
       "msg": "Content too long"
     },
     {
       "code": 6004,
-      "name": "RequestNotPending",
+      "name": "requestNotPending",
       "msg": "Friend request is not pending"
     },
     {
       "code": 6005,
-      "name": "InvalidAmount",
+      "name": "invalidAmount",
       "msg": "Invalid amount"
     },
     {
       "code": 6006,
-      "name": "ConversationCountOverflow",
+      "name": "conversationCountOverflow",
       "msg": "Conversation count overflow"
     },
     {
       "code": 6007,
-      "name": "ConversationCapacityExceeded",
+      "name": "conversationCapacityExceeded",
       "msg": "Conversation capacity exceeded"
     }
   ],
   "types": [
     {
-      "name": "AccountType",
+      "name": "accountType",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "Profile",
+            "name": "profile",
             "fields": [
               {
                 "name": "owner",
@@ -2260,42 +2260,42 @@
             ]
           },
           {
-            "name": "Post",
+            "name": "post",
             "fields": [
               {
                 "name": "author",
                 "type": "pubkey"
               },
               {
-                "name": "post_id",
+                "name": "postId",
                 "type": "u64"
               }
             ]
           },
           {
-            "name": "Chat",
+            "name": "chat",
             "fields": [
               {
-                "name": "chat_id",
+                "name": "chatId",
                 "type": "u64"
               }
             ]
           },
           {
-            "name": "Message",
+            "name": "message",
             "fields": [
               {
-                "name": "chat_id",
+                "name": "chatId",
                 "type": "u64"
               },
               {
-                "name": "message_index",
+                "name": "messageIndex",
                 "type": "u64"
               }
             ]
           },
           {
-            "name": "FriendList",
+            "name": "friendList",
             "fields": [
               {
                 "name": "owner",
@@ -2304,20 +2304,20 @@
             ]
           },
           {
-            "name": "Comment",
+            "name": "comment",
             "fields": [
               {
                 "name": "post",
                 "type": "pubkey"
               },
               {
-                "name": "comment_index",
+                "name": "commentIndex",
                 "type": "u64"
               }
             ]
           },
           {
-            "name": "Reaction",
+            "name": "reaction",
             "fields": [
               {
                 "name": "post",
@@ -2330,7 +2330,7 @@
             ]
           },
           {
-            "name": "FriendRequest",
+            "name": "friendRequest",
             "fields": [
               {
                 "name": "from",
@@ -2346,12 +2346,12 @@
       }
     },
     {
-      "name": "Chat",
+      "name": "chat",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "chat_id",
+            "name": "chatId",
             "type": "u64"
           },
           {
@@ -2363,18 +2363,18 @@
             "type": "pubkey"
           },
           {
-            "name": "message_count",
+            "name": "messageCount",
             "type": "u64"
           },
           {
-            "name": "created_at",
+            "name": "createdAt",
             "type": "i64"
           }
         ]
       }
     },
     {
-      "name": "Comment",
+      "name": "comment",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2387,7 +2387,7 @@
             "type": "pubkey"
           },
           {
-            "name": "comment_index",
+            "name": "commentIndex",
             "type": "u64"
           },
           {
@@ -2395,14 +2395,14 @@
             "type": "string"
           },
           {
-            "name": "created_at",
+            "name": "createdAt",
             "type": "i64"
           }
         ]
       }
     },
     {
-      "name": "Conversation",
+      "name": "conversation",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2423,7 +2423,7 @@
             "type": {
               "vec": {
                 "defined": {
-                  "name": "ConversationMessage"
+                  "name": "conversationMessage"
                 }
               }
             }
@@ -2432,7 +2432,7 @@
       }
     },
     {
-      "name": "ConversationMessage",
+      "name": "conversationMessage",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2452,7 +2452,7 @@
       }
     },
     {
-      "name": "FriendList",
+      "name": "friendList",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2470,7 +2470,7 @@
       }
     },
     {
-      "name": "FriendRequest",
+      "name": "friendRequest",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2487,14 +2487,14 @@
             "type": "u8"
           },
           {
-            "name": "created_at",
+            "name": "createdAt",
             "type": "i64"
           }
         ]
       }
     },
     {
-      "name": "Member",
+      "name": "member",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2510,16 +2510,16 @@
       }
     },
     {
-      "name": "Message",
+      "name": "message",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "chat_id",
+            "name": "chatId",
             "type": "u64"
           },
           {
-            "name": "message_index",
+            "name": "messageIndex",
             "type": "u64"
           },
           {
@@ -2531,11 +2531,11 @@
             "type": "string"
           },
           {
-            "name": "is_payment",
+            "name": "isPayment",
             "type": "bool"
           },
           {
-            "name": "payment_amount",
+            "name": "paymentAmount",
             "type": "u64"
           },
           {
@@ -2546,7 +2546,7 @@
       }
     },
     {
-      "name": "Post",
+      "name": "post",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2555,7 +2555,7 @@
             "type": "pubkey"
           },
           {
-            "name": "post_id",
+            "name": "postId",
             "type": "u64"
           },
           {
@@ -2563,7 +2563,7 @@
             "type": "string"
           },
           {
-            "name": "is_private",
+            "name": "isPrivate",
             "type": "bool"
           },
           {
@@ -2571,18 +2571,18 @@
             "type": "u64"
           },
           {
-            "name": "comment_count",
+            "name": "commentCount",
             "type": "u64"
           },
           {
-            "name": "created_at",
+            "name": "createdAt",
             "type": "i64"
           }
         ]
       }
     },
     {
-      "name": "Profile",
+      "name": "profile",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2595,7 +2595,7 @@
             "type": "string"
           },
           {
-            "name": "display_name",
+            "name": "displayName",
             "type": "string"
           },
           {
@@ -2603,30 +2603,30 @@
             "type": "string"
           },
           {
-            "name": "is_private",
+            "name": "isPrivate",
             "type": "bool"
           },
           {
-            "name": "post_count",
+            "name": "postCount",
             "type": "u64"
           },
           {
-            "name": "friend_count",
+            "name": "friendCount",
             "type": "u64"
           },
           {
-            "name": "active_conversation_count",
+            "name": "activeConversationCount",
             "type": "u64"
           },
           {
-            "name": "created_at",
+            "name": "createdAt",
             "type": "i64"
           }
         ]
       }
     },
     {
-      "name": "Reaction",
+      "name": "reaction",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2639,18 +2639,18 @@
             "type": "pubkey"
           },
           {
-            "name": "reaction_type",
+            "name": "reactionType",
             "type": "u8"
           },
           {
-            "name": "created_at",
+            "name": "createdAt",
             "type": "i64"
           }
         ]
       }
     },
     {
-      "name": "SessionToken",
+      "name": "sessionToken",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2659,19 +2659,19 @@
             "type": "pubkey"
           },
           {
-            "name": "target_program",
+            "name": "targetProgram",
             "type": "pubkey"
           },
           {
-            "name": "session_signer",
+            "name": "sessionSigner",
             "type": "pubkey"
           },
           {
-            "name": "valid_until",
+            "name": "validUntil",
             "type": "i64"
           }
         ]
       }
     }
   ]
-}
+};

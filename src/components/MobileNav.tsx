@@ -1,13 +1,14 @@
 "use client";
 
-import { Newspaper, MessageCircle, Wallet, User } from "lucide-react";
+import { Newspaper, MessageCircle, Wallet, User, BarChart3, Users } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 
 const navItems = [
   { id: "feed", label: "Feed", icon: Newspaper },
   { id: "chat", label: "Chat", icon: MessageCircle },
+  { id: "friends", label: "Friends", icon: Users },
   { id: "payments", label: "Pay", icon: Wallet },
-  { id: "profile", label: "Profile", icon: User },
+  { id: "profile", label: "Me", icon: User },
 ];
 
 export default function MobileNav() {

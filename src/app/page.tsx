@@ -9,6 +9,8 @@ import Feed from "@/components/Feed";
 import Chat from "@/components/Chat";
 import Payments from "@/components/Payments";
 import Profile from "@/components/Profile";
+import CreatorDashboard from "@/components/CreatorDashboard";
+import Friends from "@/components/Friends";
 import ToastContainer from "@/components/Toast";
 import Landing from "@/components/Landing";
 import OnboardingDemo from "@/components/OnboardingDemo";
@@ -69,7 +71,9 @@ export default function Home() {
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-4 sm:py-4 md:p-6 pb-[80px] md:pb-6 pt-0">
           {activeTab === "feed" && <Feed />}
           {activeTab === "chat" && <Chat />}
+          {activeTab === "friends" && <Friends />}
           {activeTab === "payments" && <Payments />}
+          {activeTab === "dashboard" && <CreatorDashboard />}
           {activeTab === "profile" && <Profile />}
         </main>
       </div>

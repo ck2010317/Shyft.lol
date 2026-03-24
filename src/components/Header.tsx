@@ -11,14 +11,18 @@ import ProfileSetup from "@/components/ProfileSetup";
 const titles: Record<string, string> = {
   feed: "Feed",
   chat: "Chat",
+  friends: "Friends",
   payments: "Payments",
+  dashboard: "Creator Dashboard",
   profile: "Profile",
 };
 
 const subtitles: Record<string, string> = {
   feed: "Your encrypted feed",
   chat: "End-to-end encrypted",
+  friends: "On-chain friend requests",
   payments: "Private via PER",
+  dashboard: "Your content analytics",
   profile: "On-chain identity",
 };
 

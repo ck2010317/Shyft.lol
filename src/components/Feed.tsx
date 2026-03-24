@@ -7,8 +7,7 @@ import { toast } from "@/components/Toast";
 import { useProgram } from "@/hooks/useProgram";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-import type { Post } from "@/types";
-import { ShyftClient } from "@/lib/program";
+import { ShyftClient, clearRpcCache } from "@/lib/program";
 
 function timeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -21,140 +20,66 @@ function timeAgo(timestamp: number): string {
   return `${days}d ago`;
 }
 
-function PostCard({ post }: { post: Post }) {
-  const { toggleLike, addComment, isConnected } = useAppStore();
-  const [showComments, setShowComments] = useState(false);
-  const [commentText, setCommentText] = useState("");
 
-  const handleComment = () => {
-    if (!commentText.trim()) return;
-    addComment(post.id, commentText);
-    setCommentText("");
-  };
+/** Reaction emoji map: type index → emoji + label + colors */
+const REACTIONS = [
+  { emoji: "❤️", label: "Love", bg: "bg-red-50", text: "text-red-500", activeBg: "bg-red-100" },
+  { emoji: "🔥", label: "Fire", bg: "bg-orange-50", text: "text-orange-500", activeBg: "bg-orange-100" },
+  { emoji: "🚀", label: "Rocket", bg: "bg-blue-50", text: "text-blue-500", activeBg: "bg-blue-100" },
+  { emoji: "😂", label: "Laugh", bg: "bg-yellow-50", text: "text-yellow-600", activeBg: "bg-yellow-100" },
+  { emoji: "👏", label: "Clap", bg: "bg-purple-50", text: "text-purple-500", activeBg: "bg-purple-100" },
+  { emoji: "💡", label: "Insightful", bg: "bg-teal-50", text: "text-teal-500", activeBg: "bg-teal-100" },
+];
 
-  return (
-    <div className="bg-white rounded-2xl border border-[#E2E8F0] p-3.5 sm:p-5 animate-fade-in hover:shadow-md active:shadow-sm transition-shadow duration-300">
-      {/* Author */}
-      <div className="flex items-center gap-2.5 sm:gap-3 mb-3">
-        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-[#EBF4FF] to-[#E0F2FE] flex items-center justify-center text-lg sm:text-xl border-2 border-white shadow-sm flex-shrink-0">
-          {post.author.avatar}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-            <span className="font-semibold text-[#1A1A2E] text-sm truncate">{post.author.displayName}</span>
-            <span className="text-xs text-[#94A3B8] truncate">@{post.author.username}</span>
-          </div>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-xs text-[#94A3B8]">{timeAgo(post.createdAt)}</span>
-            {post.isPrivate ? (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#16A34A] bg-[#F0FDF4] px-2 py-0.5 rounded-full">
-                <Lock className="w-2.5 h-2.5" /> Private
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-full">
-                <Globe className="w-2.5 h-2.5" /> Public
-              </span>
-            )}
-          </div>
-        </div>
-        {post.isPrivate && (
-          <div className="w-8 h-8 rounded-lg bg-[#F0FDF4] flex items-center justify-center flex-shrink-0">
-            <Shield className="w-4 h-4 text-[#16A34A]" />
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <p className="text-[#1A1A2E] text-sm leading-relaxed mb-4 pl-0 sm:pl-14">{post.content}</p>
-
-      {/* Actions */}
-      <div className="flex items-center gap-0.5 sm:gap-1 pl-0 sm:pl-14 border-t border-[#F1F5F9] pt-3">
-        <button
-          onClick={() => isConnected && toggleLike(post.id)}
-          className={`touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium transition-all ${
-            post.isLiked
-              ? "text-red-500 bg-red-50"
-              : "text-[#94A3B8] hover:text-red-500 hover:bg-red-50 active:bg-red-50"
-          }`}
-        >
-          <Heart className={`w-4 h-4 ${post.isLiked ? "fill-red-500" : ""}`} />
-          {post.likes}
-        </button>
-        <button
-          onClick={() => setShowComments(!showComments)}
-          className="touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium text-[#94A3B8] hover:text-[#2563EB] hover:bg-[#EFF6FF] active:bg-[#EFF6FF] transition-all"
-        >
-          <MessageCircle className="w-4 h-4" />
-          {post.comments.length}
-        </button>
-        <button className="touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium text-[#94A3B8] hover:text-[#16A34A] hover:bg-[#F0FDF4] active:bg-[#F0FDF4] transition-all">
-          <Share2 className="w-4 h-4" />
-          <span className="hidden xs:inline">Share</span>
-        </button>
-      </div>
-
-      {/* Comments */}
-      {showComments && (
-        <div className="mt-3 pl-0 sm:pl-14 space-y-3">
-          {post.comments.map((comment) => (
-            <div key={comment.id} className="flex gap-2 animate-fade-in">
-              <div className="w-7 h-7 rounded-full bg-[#F1F5F9] flex items-center justify-center text-xs flex-shrink-0">
-                {comment.author.avatar}
-              </div>
-              <div className="flex-1 bg-[#F8FAFC] rounded-xl px-3 py-2">
-                <span className="text-xs font-semibold text-[#1A1A2E]">{comment.author.displayName}</span>
-                <p className="text-xs text-[#475569] mt-0.5">{comment.content}</p>
-              </div>
-            </div>
-          ))}
-          {isConnected && (
-            <div className="flex gap-2 items-center">
-              <input
-                type="text"
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleComment()}
-                placeholder="Write a comment..."
-                className="flex-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
-              />
-              <button
-                onClick={handleComment}
-                className="touch-active w-9 h-9 rounded-lg bg-[#2563EB] text-white flex items-center justify-center hover:bg-[#1D4ED8] transition-colors flex-shrink-0"
-              >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Reusable on-chain post card with working likes + comments */
+/** Reusable on-chain post card with on-chain likes, comments & reactions */
 function OnChainPostCard({
   post,
   profile,
   isMe,
   program,
   variant,
+  allComments,
+  allReactions,
+  profileMap,
+  onCommentAdded,
+  onReactionAdded,
 }: {
   post: any;
   profile: any;
   isMe: boolean;
   program: ShyftClient | null;
   variant: "public" | "private";
+  allComments: { publicKey: string; post: string; author: string; commentIndex: string; content: string; createdAt: string }[];
+  allReactions: { publicKey: string; post: string; user: string; reactionType: number; createdAt: string }[];
+  profileMap: Record<string, any>;
+  onCommentAdded: () => void;
+  onReactionAdded: () => void;
 }) {
-  const { onChainComments, addOnChainComment, likedPosts, addLikedPost, isConnected, currentUser } = useAppStore();
+  const { likedPosts, addLikedPost, isConnected, currentUser } = useAppStore();
+  const { publicKey: walletKey } = useWallet();
   const [showComments, setShowComments] = useState(false);
+  const [showReactions, setShowReactions] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [liking, setLiking] = useState(false);
+  const [commenting, setCommenting] = useState(false);
+  const [reacting, setReacting] = useState(false);
   const [localLikeBoost, setLocalLikeBoost] = useState(0);
 
   const hasLiked = likedPosts.includes(post.publicKey);
-  const comments = onChainComments[post.publicKey] || [];
+  const postComments = allComments.filter((c) => c.post === post.publicKey)
+    .sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
+  const postReactions = allReactions.filter((r) => r.post === post.publicKey);
   const totalLikes = Number(post.likes || 0) + localLikeBoost;
-  const totalComments = Number(post.commentCount || 0) + comments.length;
+  const totalComments = postComments.length;
+
+  // Group reactions by type
+  const reactionCounts: Record<number, number> = {};
+  let myReactionType: number | null = null;
+  const myAddr = walletKey?.toBase58() || "";
+  for (const r of postReactions) {
+    reactionCounts[r.reactionType] = (reactionCounts[r.reactionType] || 0) + 1;
+    if (r.user === myAddr) myReactionType = r.reactionType;
+  }
 
   const displayName = isMe
     ? "You"
@@ -176,7 +101,7 @@ function OnChainPostCard({
       await program.likePost(authorPubkey, postId);
       addLikedPost(post.publicKey);
       setLocalLikeBoost((prev) => prev + 1);
-      toast("success", "Liked! ❤️", "Your like has been recorded on-chain");
+      toast("success", "Liked! ❤️", "Recorded on-chain — visible to everyone");
     } catch (err: any) {
       console.error("Like error:", err);
       if (err?.message?.includes("User rejected") || err?.message?.includes("rejected the request")) {
@@ -188,16 +113,47 @@ function OnChainPostCard({
     setLiking(false);
   };
 
-  const handleComment = () => {
-    if (!commentText.trim() || !currentUser) return;
-    addOnChainComment(
-      post.publicKey,
-      currentUser.publicKey,
-      currentUser.displayName,
-      commentText.trim()
-    );
-    setCommentText("");
-    toast("success", "Comment added", "Your comment has been saved");
+  const handleComment = async () => {
+    if (!commentText.trim() || !currentUser || !program || commenting) return;
+    setCommenting(true);
+    try {
+      const authorPubkey = new PublicKey(post.author);
+      const postId = Number(post.postId);
+      const commentIndex = Date.now(); // unique index
+      await program.createComment(authorPubkey, postId, commentIndex, commentText.trim());
+      setCommentText("");
+      toast("success", "Comment posted! 💬", "Your comment is on-chain — everyone can see it");
+      onCommentAdded();
+    } catch (err: any) {
+      console.error("Comment error:", err);
+      if (err?.message?.includes("User rejected") || err?.message?.includes("rejected the request")) {
+        toast("error", "Comment cancelled", "You rejected the transaction");
+      } else {
+        toast("error", "Comment failed", err?.message?.slice(0, 80) || "Please try again");
+      }
+    }
+    setCommenting(false);
+  };
+
+  const handleReaction = async (reactionType: number) => {
+    if (!program || !isConnected || reacting || myReactionType !== null) return;
+    setReacting(true);
+    try {
+      const authorPubkey = new PublicKey(post.author);
+      const postId = Number(post.postId);
+      await program.reactToPost(authorPubkey, postId, reactionType);
+      setShowReactions(false);
+      toast("success", `Reacted ${REACTIONS[reactionType].emoji}`, "Your reaction is on-chain!");
+      onReactionAdded();
+    } catch (err: any) {
+      console.error("Reaction error:", err);
+      if (err?.message?.includes("User rejected") || err?.message?.includes("rejected the request")) {
+        toast("error", "Reaction cancelled", "You rejected the transaction");
+      } else {
+        toast("error", "Reaction failed", err?.message?.slice(0, 80) || "Please try again");
+      }
+    }
+    setReacting(false);
   };
 
   const isPublic = variant === "public";
@@ -248,7 +204,31 @@ function OnChainPostCard({
       </div>
 
       {/* Content */}
-      <p className="text-[#1A1A2E] text-sm leading-relaxed mb-4 pl-0 sm:pl-14">{post.content}</p>
+      <p className="text-[#1A1A2E] text-sm leading-relaxed mb-3 pl-0 sm:pl-14">{post.content}</p>
+
+      {/* Reaction pills (show aggregated reactions) */}
+      {postReactions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pl-0 sm:pl-14 mb-3">
+          {Object.entries(reactionCounts).map(([typeStr, count]) => {
+            const typeIdx = Number(typeStr);
+            const r = REACTIONS[typeIdx];
+            if (!r) return null;
+            const isMyReaction = myReactionType === typeIdx;
+            return (
+              <span
+                key={typeIdx}
+                className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border transition-all ${
+                  isMyReaction
+                    ? `${r.activeBg} ${r.text} border-current`
+                    : `${r.bg} ${r.text} border-transparent`
+                }`}
+              >
+                {r.emoji} {count}
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex items-center gap-0.5 sm:gap-1 pl-0 sm:pl-14 border-t border-[#F1F5F9] pt-3">
@@ -268,11 +248,55 @@ function OnChainPostCard({
         </button>
         <button
           onClick={() => setShowComments(!showComments)}
-          className="touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium text-[#94A3B8] hover:text-[#2563EB] hover:bg-[#EFF6FF] active:bg-[#EFF6FF] transition-all"
+          className={`touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium transition-all ${
+            showComments
+              ? "text-[#2563EB] bg-[#EFF6FF]"
+              : "text-[#94A3B8] hover:text-[#2563EB] hover:bg-[#EFF6FF] active:bg-[#EFF6FF]"
+          }`}
         >
           <MessageCircle className="w-4 h-4" />
           {totalComments}
         </button>
+
+        {/* Reaction button */}
+        <div className="relative">
+          <button
+            onClick={() => setShowReactions(!showReactions)}
+            disabled={!isConnected || myReactionType !== null}
+            className={`touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium transition-all ${
+              myReactionType !== null
+                ? `${REACTIONS[myReactionType]?.text || "text-[#94A3B8]"} ${REACTIONS[myReactionType]?.bg || "bg-[#F1F5F9]"}`
+                : showReactions
+                  ? "text-[#EA580C] bg-orange-50"
+                  : "text-[#94A3B8] hover:text-[#EA580C] hover:bg-orange-50 active:bg-orange-50"
+            } disabled:cursor-not-allowed`}
+          >
+            {myReactionType !== null ? REACTIONS[myReactionType]?.emoji : "😀"}
+            {postReactions.length > 0 && <span>{postReactions.length}</span>}
+          </button>
+
+          {/* Reaction picker popup */}
+          {showReactions && !reacting && myReactionType === null && (
+            <div className="absolute bottom-full left-0 mb-2 flex gap-1 bg-white rounded-2xl shadow-lg border border-[#E2E8F0] p-2 z-50 animate-fade-in">
+              {REACTIONS.map((r, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleReaction(idx)}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg hover:${r.activeBg} hover:scale-110 active:scale-95 transition-all`}
+                  title={r.label}
+                >
+                  {r.emoji}
+                </button>
+              ))}
+            </div>
+          )}
+          {reacting && (
+            <div className="absolute bottom-full left-0 mb-2 bg-white rounded-2xl shadow-lg border border-[#E2E8F0] px-4 py-2 z-50">
+              <span className="text-xs text-[#64748B] animate-pulse">Sending...</span>
+            </div>
+          )}
+        </div>
+
         <button className="touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium text-[#94A3B8] hover:text-[#16A34A] hover:bg-[#F0FDF4] active:bg-[#F0FDF4] transition-all">
           <Share2 className="w-4 h-4" />
         </button>
@@ -286,26 +310,38 @@ function OnChainPostCard({
         </a>
       </div>
 
-      {/* Comments section */}
+      {/* On-chain comments section */}
       {showComments && (
         <div className="mt-3 pl-0 sm:pl-14 space-y-3">
-          {comments.length === 0 && (
-            <p className="text-xs text-[#94A3B8] text-center py-2">No comments yet. Be the first!</p>
+          {postComments.length === 0 && !commenting && (
+            <p className="text-xs text-[#94A3B8] text-center py-2">No comments yet. Be the first to comment on-chain!</p>
           )}
-          {comments.map((comment) => (
-            <div key={comment.id} className="flex gap-2 animate-fade-in">
-              <div className="w-7 h-7 rounded-full bg-[#F1F5F9] flex items-center justify-center text-xs flex-shrink-0">
-                💬
-              </div>
-              <div className="flex-1 bg-[#F8FAFC] rounded-xl px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-[#1A1A2E]">{comment.displayName}</span>
-                  <span className="text-[10px] text-[#94A3B8]">{timeAgo(comment.timestamp)}</span>
+          {postComments.map((comment) => {
+            const commenterProfile = profileMap[comment.author];
+            const commenterName = commenterProfile?.displayName || comment.author.slice(0, 4) + "..." + comment.author.slice(-4);
+            const isMyComment = comment.author === myAddr;
+            return (
+              <div key={comment.publicKey} className="flex gap-2 animate-fade-in">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0 ${
+                  isMyComment ? "bg-[#EFF6FF]" : "bg-[#F1F5F9]"
+                }`}>
+                  {isMyComment ? "🔒" : "💬"}
                 </div>
-                <p className="text-xs text-[#475569] mt-0.5">{comment.content}</p>
+                <div className="flex-1 bg-[#F8FAFC] rounded-xl px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-[#1A1A2E]">{isMyComment ? "You" : commenterName}</span>
+                    <span className="text-[10px] text-[#94A3B8]">
+                      {Number(comment.createdAt) > 0 ? timeAgo(Number(comment.createdAt) * 1000) : "recently"}
+                    </span>
+                    <span className="inline-flex items-center gap-0.5 text-[8px] font-medium text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.5 rounded-full">
+                      <Globe className="w-2 h-2" /> on-chain
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#475569] mt-0.5">{comment.content}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {isConnected && (
             <div className="flex gap-2 items-center">
               <input
@@ -313,15 +349,20 @@ function OnChainPostCard({
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleComment()}
-                placeholder="Write a comment..."
-                className="flex-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+                placeholder={commenting ? "Posting on-chain..." : "Write a comment (stored on-chain)..."}
+                disabled={commenting}
+                className="flex-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] disabled:opacity-50"
               />
               <button
                 onClick={handleComment}
-                disabled={!commentText.trim()}
+                disabled={!commentText.trim() || commenting}
                 className="touch-active w-9 h-9 rounded-lg bg-[#2563EB] text-white flex items-center justify-center hover:bg-[#1D4ED8] disabled:opacity-40 transition-colors flex-shrink-0"
               >
-                <Send className="w-3.5 h-3.5" />
+                {commenting ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
               </button>
             </div>
           )}
@@ -332,7 +373,7 @@ function OnChainPostCard({
 }
 
 export default function Feed() {
-  const { posts, isConnected, friendsOnlyDefault } = useAppStore();
+  const { isConnected, friendsOnlyDefault } = useAppStore();
   const [newPost, setNewPost] = useState("");
   const [isPrivate, setIsPrivate] = useState(friendsOnlyDefault);
   const program = useProgram();
@@ -342,6 +383,10 @@ export default function Feed() {
   const [loadingOnchain, setLoadingOnchain] = useState(false);
   const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [friendList, setFriendList] = useState<PublicKey[]>([]);
+  const [allComments, setAllComments] = useState<any[]>([]);
+  const [allReactions, setAllReactions] = useState<any[]>([]);
+
+  const [posting, setPosting] = useState(false);
 
   // Sync default privacy when user changes it in Profile settings
   useEffect(() => {
@@ -352,6 +397,7 @@ export default function Feed() {
   const fetchOnchainPosts = async () => {
     if (!program || !publicKey) return;
     setLoadingOnchain(true);
+    clearRpcCache(); // Always fetch fresh data
     try {
       // Get user's friend list
       const userFriendList = await program.getFriendList(publicKey);
@@ -360,10 +406,15 @@ export default function Feed() {
       setFriendList(friends);
 
       // Fetch ALL posts (including delegated to TEE) and profiles in one go
-      const [allMapped, profiles] = await Promise.all([
+      const [allMapped, profiles, comments, reactions] = await Promise.all([
         program.getAllPostsIncludingDelegated(),
         program.getAllProfiles(),
+        program.getAllComments(),
+        program.getAllReactions(),
       ]);
+
+      setAllComments(comments);
+      setAllReactions(reactions);
 
       // Split into public and private
       const publicPosts = allMapped.filter((p: any) => !p.isPrivate);
@@ -380,23 +431,26 @@ export default function Feed() {
       console.log("🔒 Your private posts:", myPrivate.length);
       privatePosts.push(...myPrivate);
       
-      // 2. Include mutual friends' private posts
-      for (const friend of friends) {
-        try {
-          const friendFL = await program.getFriendList(friend);
-          const friendFriends = friendFL?.friends || [];
-          const isMutual = friendFriends.some((f: PublicKey) => f.equals(publicKey));
-          
-          if (isMutual) {
-            const friendAddr = friend.toBase58();
-            const friendPrivate = allPrivatePosts.filter((p: any) => p.author === friendAddr);
-            console.log(`✓ Mutual friend ${friendAddr.slice(0, 8)}... — ${friendPrivate.length} private posts`);
-            privatePosts.push(...friendPrivate);
-          } else {
-            console.log(`✗ Not mutual: ${friend.toBase58().slice(0, 8)}...`);
+      // 2. Check mutual friendship — batch all at once with Promise.all
+      const mutualResults = await Promise.all(
+        friends.map(async (friend) => {
+          try {
+            const friendFL = await program.getFriendList(friend);
+            const friendFriends = friendFL?.friends || [];
+            const isMutual = friendFriends.some((f: PublicKey) => f.equals(publicKey));
+            return { friend, isMutual };
+          } catch {
+            return { friend, isMutual: false };
           }
-        } catch (err) {
-          console.error(`Failed to check friend ${friend.toBase58().slice(0, 8)}:`, err);
+        })
+      );
+
+      for (const { friend, isMutual } of mutualResults) {
+        if (isMutual) {
+          const friendAddr = friend.toBase58();
+          const friendPrivate = allPrivatePosts.filter((p: any) => p.author === friendAddr);
+          console.log(`✓ Mutual friend ${friendAddr.slice(0, 8)}... — ${friendPrivate.length} private posts`);
+          privatePosts.push(...friendPrivate);
         }
       }
 
@@ -417,8 +471,34 @@ export default function Feed() {
     fetchOnchainPosts();
   }, [program, publicKey]);
 
+  // Auto-refresh interactions every 15s so other users see new comments/reactions
+  useEffect(() => {
+    if (!program || !publicKey) return;
+    const interval = setInterval(() => {
+      refreshInteractions();
+    }, 15_000);
+    return () => clearInterval(interval);
+  }, [program, publicKey]);
+
+  // Light refresh: just comments + reactions (no full post re-fetch)
+  const refreshInteractions = async () => {
+    if (!program) return;
+    try {
+      // Force clear cache so we get fresh data
+      clearRpcCache();
+      const [comments, reactions] = await Promise.all([
+        program.getAllComments(),
+        program.getAllReactions(),
+      ]);
+      setAllComments(comments);
+      setAllReactions(reactions);
+    } catch (err) {
+      console.error("Failed to refresh interactions:", err);
+    }
+  };
+
   const handlePost = async () => {
-    if (!newPost.trim()) return;
+    if (!newPost.trim() || posting) return;
     if (!program || !publicKey) {
       toast("error", "Wallet not connected", "Please connect your wallet to post");
       return;
@@ -428,13 +508,12 @@ export default function Feed() {
     const content = newPost;
     const privacy = isPrivate;
 
-    // Instant local update (optimistic)
-    const localPostId = useAppStore.getState().addPost(content, privacy);
+    setPosting(true);
     setNewPost("");
 
     toast("privacy", "Posting...", privacy ? "Creating private post with MagicBlock TEE" : "Publishing to your feed");
 
-    // On-chain call in background
+    // On-chain call
     try {
       // Double-check wallet is still connected before sending transaction
       if (!publicKey || program.provider.wallet.publicKey?.toBase58() !== publicKey.toBase58()) {
@@ -460,14 +539,15 @@ export default function Feed() {
         const sig = await program.createPost(postId, content, false);
         toast("success", "Post confirmed on Solana", `TX: ${sig.slice(0, 8)}...`);
       }
+
+      // Refresh on-chain posts so the real post shows up immediately
+      setTimeout(() => fetchOnchainPosts(), 1500);
     } catch (err: any) {
       console.error("On-chain post error:", err);
       const errorMsg = err?.message?.slice(0, 150) || "Unknown error";
 
-      // Remove the optimistic local post since it failed
-      if (localPostId) {
-        useAppStore.getState().removePost(localPostId);
-      }
+      // Restore content so user doesn't lose it
+      setNewPost(content);
       
       // Provide helpful error messages
       if (errorMsg.includes("User rejected") || errorMsg.includes("rejected the request")) {
@@ -483,6 +563,8 @@ export default function Feed() {
       } else {
         toast("error", "On-chain post failed", errorMsg);
       }
+    } finally {
+      setPosting(false);
     }
   };
 
@@ -511,10 +593,10 @@ export default function Feed() {
             </button>
             <button
               onClick={handlePost}
-              disabled={!newPost.trim()}
+              disabled={!newPost.trim() || posting}
               className="touch-active px-4 sm:px-5 py-2 bg-[#2563EB] text-white text-sm font-medium rounded-xl hover:bg-[#1D4ED8] disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm shadow-blue-200"
             >
-              Post
+              {posting ? "Posting..." : "Post"}
             </button>
           </div>
         </div>
@@ -530,11 +612,6 @@ export default function Feed() {
           <p className="text-sm text-[#64748B] max-w-sm mx-auto">Connect your wallet to start posting, chatting, and sending private payments on Solana.</p>
         </div>
       )}
-
-      {/* Local posts */}
-      {posts.map((post) => (
-        <PostCard key={post.id} post={post} />
-      ))}
 
       {/* On-chain public posts from all users */}
       {isConnected && (
@@ -571,6 +648,11 @@ export default function Feed() {
                 isMe={isMe}
                 program={program}
                 variant="public"
+                allComments={allComments}
+                allReactions={allReactions}
+                profileMap={profileMap}
+                onCommentAdded={refreshInteractions}
+                onReactionAdded={refreshInteractions}
               />
             );
           })}
@@ -608,6 +690,11 @@ export default function Feed() {
                   isMe={isMe}
                   program={program}
                   variant="private"
+                  allComments={allComments}
+                  allReactions={allReactions}
+                  profileMap={profileMap}
+                  onCommentAdded={refreshInteractions}
+                  onReactionAdded={refreshInteractions}
                 />
               );
             })

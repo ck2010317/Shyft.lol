@@ -60,4 +60,4 @@ export interface Payment {
   txSignature?: string;
 }
 
-export type TabType = 'feed' | 'chat' | 'payments' | 'profile';
+export type TabType = 'feed' | 'chat' | 'payments' | 'profile' | 'dashboard' | 'friends';
