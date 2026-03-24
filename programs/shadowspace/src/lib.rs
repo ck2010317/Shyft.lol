@@ -146,6 +146,7 @@ pub mod shadowspace {
         content: String,
         is_private: bool,
     ) -> Result<()> {
+        require!(content.len() <= 280, ShadowError::ContentTooLong);
         let post = &mut ctx.accounts.post;
         post.author = ctx.accounts.author.key();
         post.post_id = post_id;
@@ -181,6 +182,7 @@ pub mod shadowspace {
         comment_index: u64,
         content: String,
     ) -> Result<()> {
+        require!(content.len() <= 140, ShadowError::ContentTooLong);
         let comment = &mut ctx.accounts.comment;
         comment.post = ctx.accounts.post.key();
         comment.author = ctx.accounts.author.key();
@@ -792,7 +794,8 @@ pub struct Post {
 }
 
 impl Post {
-    pub const LEN: usize = 32 + 8 + 4 + 512 + 1 + 8 + 8 + 8;
+    // 32(author) + 8(post_id) + 4(str_prefix) + 280(content) + 1(private) + 8(likes) + 8(comments) + 8(timestamp)
+    pub const LEN: usize = 32 + 8 + 4 + 280 + 1 + 8 + 8 + 8;
 }
 
 #[account]
@@ -805,7 +808,8 @@ pub struct Comment {
 }
 
 impl Comment {
-    pub const LEN: usize = 32 + 32 + 8 + 4 + 280 + 8;
+    // 32(post) + 32(author) + 8(index) + 4(str_prefix) + 140(content) + 8(timestamp)
+    pub const LEN: usize = 32 + 32 + 8 + 4 + 140 + 8;
 }
 
 #[account]

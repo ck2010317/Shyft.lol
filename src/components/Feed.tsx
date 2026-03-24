@@ -344,15 +344,19 @@ function OnChainPostCard({
           })}
           {isConnected && (
             <div className="flex gap-2 items-center">
-              <input
-                type="text"
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleComment()}
-                placeholder={commenting ? "Posting on-chain..." : "Write a comment (stored on-chain)..."}
-                disabled={commenting}
-                className="flex-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] disabled:opacity-50"
-              />
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleComment()}
+                  maxLength={140}
+                  placeholder={commenting ? "Posting on-chain..." : "Write a comment..."}
+                  disabled={commenting}
+                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] disabled:opacity-50"
+                />
+                {commentText.length > 100 && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#94A3B8]">{140 - commentText.length}</span>}
+              </div>
               <button
                 onClick={handleComment}
                 disabled={!commentText.trim() || commenting}
@@ -576,9 +580,11 @@ export default function Feed() {
           <textarea
             value={newPost}
             onChange={(e) => setNewPost(e.target.value)}
+            maxLength={280}
             placeholder="What's on your mind? Your thoughts are encrypted..."
             className="w-full resize-none bg-transparent text-sm focus:outline-none placeholder:text-[#94A3B8] min-h-[60px] sm:min-h-[80px]"
           />
+          {newPost.length > 200 && <div className="text-right text-[10px] text-[#94A3B8] -mt-1">{280 - newPost.length} characters left</div>}
           <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#F1F5F9] gap-3">
             <button
               onClick={() => setIsPrivate(!isPrivate)}
