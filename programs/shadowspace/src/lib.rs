@@ -148,7 +148,7 @@ pub mod shadowspace {
     ) -> Result<()> {
         require!(content.len() <= 280, ShadowError::ContentTooLong);
         let post = &mut ctx.accounts.post;
-        post.author = ctx.accounts.author.key();
+        post.author = ctx.accounts.profile.owner;
         post.post_id = post_id;
         post.content = content;
         post.is_private = is_private;
