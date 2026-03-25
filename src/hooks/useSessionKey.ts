@@ -49,7 +49,7 @@ function writeI64LE(arr: Uint8Array, value: bigint, offset: number): void {
 }
 
 /** Encode create_session instruction data (Anchor discriminator + args) */
-function encodeCreateSessionData(topUp: boolean, validUntil: number): Uint8Array {
+function encodeCreateSessionData(topUp: boolean, validUntil: number, lamports: number | null): Uint8Array {
   // Anchor discriminator for "create_session" = sha256("global:create_session")[0..8]
   const discriminator = [242, 193, 143, 179, 150, 25, 122, 227];
 
@@ -61,13 +61,24 @@ function encodeCreateSessionData(topUp: boolean, validUntil: number): Uint8Array
   validUntilBytes[0] = 1; // Some
   writeI64LE(validUntilBytes, BigInt(validUntil), 1);
 
-  // Concat all parts (on-chain IDL only has topUp + validUntil, no lamports arg)
-  const total = discriminator.length + topUpBytes.length + validUntilBytes.length;
+  // lamports: Option<u64> — Some(amount) or None
+  let lamportsBytes: Uint8Array;
+  if (lamports !== null && lamports > 0) {
+    lamportsBytes = new Uint8Array(9);
+    lamportsBytes[0] = 1; // Some
+    writeU64LE(lamportsBytes, BigInt(lamports), 1);
+  } else {
+    lamportsBytes = new Uint8Array([0]); // None
+  }
+
+  // Concat all parts
+  const total = discriminator.length + topUpBytes.length + validUntilBytes.length + lamportsBytes.length;
   const result = new Uint8Array(total);
   let offset = 0;
   result.set(discriminator, offset); offset += discriminator.length;
   result.set(topUpBytes, offset); offset += topUpBytes.length;
-  result.set(validUntilBytes, offset);
+  result.set(validUntilBytes, offset); offset += validUntilBytes.length;
+  result.set(lamportsBytes, offset);
 
   return result;
 }
@@ -175,7 +186,8 @@ export function useSessionKey(): SessionKeyState {
       // Session valid for 24 hours
       const validUntil = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
 
-      // Build create_session instruction
+      // topUp=true tells the program to transfer lamports from authority to ephemeral key
+      // lamports=2_000_000 (0.002 SOL) funds ~200 tx fees for the session signer
       const createIx = new TransactionInstruction({
         programId: SESSION_KEYS_PROGRAM_ID,
         keys: [
@@ -185,17 +197,10 @@ export function useSessionKey(): SessionKeyState {
           { pubkey: TARGET_PROGRAM_ID, isSigner: false, isWritable: false },
           { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
         ],
-        data: Buffer.from(encodeCreateSessionData(true, validUntil)),
+        data: Buffer.from(encodeCreateSessionData(true, validUntil, 2_000_000)),
       });
 
-      // Transfer SOL to ephemeral key so it can pay tx fees
-      const topUpIx = SystemProgram.transfer({
-        fromPubkey: authority,
-        toPubkey: ephemeralKp.publicKey,
-        lamports: 2_000_000, // 0.002 SOL for ~200 transactions
-      });
-
-      const tx = new Transaction().add(topUpIx).add(createIx);
+      const tx = new Transaction().add(createIx);
       tx.feePayer = authority;
       tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
