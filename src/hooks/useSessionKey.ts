@@ -109,10 +109,12 @@ export interface SessionKeyState {
   sessionTokenPda: PublicKey | null;
   /** When the session expires (unix ms) */
   expiresAt: number | null;
-  /** Create a new session (1 wallet sign) — valid for 24 hours.
+  /** Remaining SOL balance on the session key */
+  sessionBalance: number | null;
+  /** Create a new session (1 wallet sign) — runs until balance is depleted.
    *  Returns the keypair + token PDA directly (don't wait for re-render). */
   createSession: () => Promise<{ keypair: Keypair; tokenPda: PublicKey } | null>;
-  /** Revoke current session */
+  /** Revoke current session (refunds remaining SOL to wallet) */
   revokeSession: () => Promise<void>;
 }
 
@@ -126,6 +128,7 @@ export function useSessionKey(): SessionKeyState {
   const [sessionKeypair, setSessionKeypair] = useState<Keypair | null>(null);
   const [sessionTokenPda, setSessionTokenPda] = useState<PublicKey | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [sessionBalance, setSessionBalance] = useState<number | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   const authority = wallet?.publicKey ?? null;
@@ -157,7 +160,7 @@ export function useSessionKey(): SessionKeyState {
     }
   }, [authority]);
 
-  // Validate session token exists on-chain AND ephemeral key has enough SOL
+  // Validate session token exists on-chain AND track ephemeral key balance
   useEffect(() => {
     if (!sessionTokenPda || !sessionKeypair || !connection) return;
     const clearSession = () => {
@@ -165,23 +168,30 @@ export function useSessionKey(): SessionKeyState {
       setSessionKeypair(null);
       setSessionTokenPda(null);
       setExpiresAt(null);
+      setSessionBalance(null);
       if (authority) localStorage.removeItem(STORAGE_KEY_PREFIX + authority.toBase58());
     };
-    Promise.all([
-      connection.getAccountInfo(sessionTokenPda),
-      connection.getBalance(sessionKeypair.publicKey),
-    ]).then(([info, balance]) => {
-      if (!info) {
-        console.log("🔑 Session token PDA no longer exists on-chain");
-        clearSession();
-      } else if (balance < 4_000_000) {
-        // Need at least ~3.4M lamports for one post creation rent
-        console.log("🔑 Session key balance too low:", balance, "lamports — clearing");
-        clearSession();
-      } else {
-        console.log("🔑 Session key balance:", balance / 1e9, "SOL");
-      }
-    }).catch(() => {});
+    const checkBalance = () => {
+      Promise.all([
+        connection.getAccountInfo(sessionTokenPda),
+        connection.getBalance(sessionKeypair.publicKey),
+      ]).then(([info, balance]) => {
+        if (!info) {
+          console.log("🔑 Session token PDA no longer exists on-chain");
+          clearSession();
+        } else if (balance < 4_000_000) {
+          console.log("🔑 Session key balance depleted:", balance, "lamports — session ended");
+          clearSession();
+        } else {
+          setSessionBalance(balance / 1e9);
+          console.log("🔑 Session key balance:", (balance / 1e9).toFixed(4), "SOL");
+        }
+      }).catch(() => {});
+    };
+    checkBalance();
+    // Poll balance every 15 seconds to keep UI updated
+    const interval = setInterval(checkBalance, 15_000);
+    return () => clearInterval(interval);
   }, [sessionTokenPda, sessionKeypair, connection, authority]);
 
   /** Create a new session — requires 1 wallet signature */
@@ -194,11 +204,12 @@ export function useSessionKey(): SessionKeyState {
       const ephemeralKp = Keypair.generate();
       const [tokenPda] = getSessionTokenPda(TARGET_PROGRAM_ID, ephemeralKp.publicKey, authority);
 
-      // Session valid for 24 hours
-      const validUntil = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
+      // Session valid for 7 days (max allowed by on-chain program)
+      // Session stays active until the balance runs out
+      const validUntil = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
 
       // topUp=true tells the program to transfer lamports from authority to ephemeral key
-      // 50_000_000 lamports (0.05 SOL) funds ~14 post creations (rent ~3.4M each) + tx fees
+      // 15_000_000 lamports (0.015 SOL) — small deposit, session runs until balance depletes
       const createIx = new TransactionInstruction({
         programId: SESSION_KEYS_PROGRAM_ID,
         keys: [
@@ -208,7 +219,7 @@ export function useSessionKey(): SessionKeyState {
           { pubkey: TARGET_PROGRAM_ID, isSigner: false, isWritable: false },
           { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
         ],
-        data: Buffer.from(encodeCreateSessionData(true, validUntil, 50_000_000)),
+        data: Buffer.from(encodeCreateSessionData(true, validUntil, 15_000_000)),
       });
 
       const tx = new Transaction().add(createIx);
@@ -251,11 +262,30 @@ export function useSessionKey(): SessionKeyState {
     }
   }, [wallet, authority, connection]);
 
-  /** Revoke current session */
+  /** Revoke current session — refunds remaining SOL back to wallet */
   const revokeSession = useCallback(async () => {
     if (!wallet || !authority || !sessionKeypair || !sessionTokenPda) return;
 
     try {
+      // 1. Refund remaining SOL from ephemeral key back to wallet
+      const balance = await connection.getBalance(sessionKeypair.publicKey);
+      const txFee = 5000; // reserve for this refund tx fee
+      if (balance > txFee + 1000) {
+        const refundIx = SystemProgram.transfer({
+          fromPubkey: sessionKeypair.publicKey,
+          toPubkey: authority,
+          lamports: balance - txFee,
+        });
+        const refundTx = new Transaction().add(refundIx);
+        refundTx.feePayer = sessionKeypair.publicKey;
+        refundTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        refundTx.sign(sessionKeypair);
+        const refundSig = await connection.sendRawTransaction(refundTx.serialize());
+        await connection.confirmTransaction(refundSig, "confirmed");
+        console.log("🔑 Refunded", ((balance - txFee) / 1e9).toFixed(4), "SOL back to wallet:", refundSig);
+      }
+
+      // 2. Revoke the session token on-chain (rent goes back to authority)
       const revokeIx = new TransactionInstruction({
         programId: SESSION_KEYS_PROGRAM_ID,
         keys: [
@@ -281,6 +311,7 @@ export function useSessionKey(): SessionKeyState {
     setSessionKeypair(null);
     setSessionTokenPda(null);
     setExpiresAt(null);
+    setSessionBalance(null);
     localStorage.removeItem(STORAGE_KEY_PREFIX + authority.toBase58());
   }, [wallet, authority, connection, sessionKeypair, sessionTokenPda]);
 
@@ -292,6 +323,7 @@ export function useSessionKey(): SessionKeyState {
     sessionKeypair,
     sessionTokenPda,
     expiresAt,
+    sessionBalance,
     createSession,
     revokeSession,
   };

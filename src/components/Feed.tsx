@@ -671,9 +671,9 @@ export default function Feed() {
               }
             </span>
           </div>
-          {sessionState.isActive && sessionState.expiresAt && (
+          {sessionState.isActive && sessionState.sessionBalance !== null && (
             <span className="text-[10px] opacity-70">
-              Expires {new Date(sessionState.expiresAt).toLocaleTimeString()}
+              Balance: {sessionState.sessionBalance.toFixed(4)} SOL
             </span>
           )}
         </div>
