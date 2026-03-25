@@ -583,7 +583,7 @@ export default function Feed() {
 
       if (privacy) {
         const result = await program.createPrivatePost(postId, content, friendList, session);
-        toast("success", session ? "Private post created in 1 TX (no popup!) 🔐🔑" : "Private post created in 1 TX! 🔐", `TX: ${result.sig.slice(0, 8)}...`);
+        toast("success", "Private post created + encrypted 🔐", `TX: ${result.sig.slice(0, 8)}...`);
       } else {
         const sig = await program.createPost(postId, content, false, session);
         toast("success", session ? "Post confirmed (no wallet popup!) 🔑" : "Post confirmed on Solana", `TX: ${sig.slice(0, 8)}...`);

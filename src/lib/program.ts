@@ -1705,7 +1705,14 @@ export class ShyftClient {
       console.warn("Undelegate check/attempt failed:", e?.message?.slice(0, 80));
     }
 
-    const signer = session ? session.sessionKeypair.publicKey : realWallet;
+    // For private posts with session keys:
+    //   - Session key signs the createPost IX (session auth)
+    //   - Wallet pays for everything (feePayer + payer for permission/delegation)
+    //   - Wallet co-signs the TX (1 popup — unavoidable for expensive private posts)
+    // This prevents the session key from being drained below rent-exemption
+    const sessionAuthor = session ? session.sessionKeypair.publicKey : realWallet;
+    const payer = realWallet; // Wallet always pays for private posts
+
     const [profilePda] = getProfilePda(realWallet);
     const [postPda] = getPostPda(realWallet, postId);
     const [permissionPda] = getPermissionPda(postPda);
@@ -1723,31 +1730,31 @@ export class ShyftClient {
 
     // === Build 3 instructions ===
 
-    // IX 1: createPost
+    // IX 1: createPost — session key signs as author (if session active)
     const createPostIx = await this.program.methods
       .createPost(new BN(postId), content, true)
       .accountsPartial({
         post: postPda,
         profile: profilePda,
-        author: signer,
+        author: sessionAuthor,
         systemProgram: SystemProgram.programId,
         sessionToken: session ? session.sessionTokenPda : (null as any),
       })
       .instruction();
 
-    // IX 2: createPermission
+    // IX 2: createPermission — wallet pays rent
     const createPermIx = await this.program.methods
       .createPermission(accountType, members)
       .accounts({
         permissionedAccount: postPda,
         permission: permissionPda,
-        payer: signer,
+        payer: payer,
         permissionProgram: PERMISSION_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
       .instruction();
 
-    // IX 3: delegatePda
+    // IX 3: delegatePda — wallet pays rent
     const delegateIx = await this.program.methods
       .delegatePda(accountType)
       .accounts({
@@ -1755,7 +1762,7 @@ export class ShyftClient {
         delegationRecordPda,
         delegationMetadataPda,
         pda: postPda,
-        payer: signer,
+        payer: payer,
         ownerProgram: PROGRAM_ID,
         delegationProgram: DELEGATION_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
@@ -1767,14 +1774,18 @@ export class ShyftClient {
 
     // === Send as single TX ===
     const tx = new Transaction().add(createPostIx, createPermIx, delegateIx);
-    tx.feePayer = signer;
+    tx.feePayer = payer; // Wallet always pays the TX fee for private posts
     tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
 
     let sig: string;
     if (session) {
-      // Session key signs — no wallet popup
-      tx.sign(session.sessionKeypair);
-      sig = await this.provider.connection.sendRawTransaction(tx.serialize());
+      // Session key + wallet co-sign:
+      //   - Session key signs createPost (via session token auth)
+      //   - Wallet signs as feePayer + payer for permission/delegation
+      // This requires 1 wallet popup but avoids draining the session key
+      tx.partialSign(session.sessionKeypair);
+      const walletSigned = await this.provider.wallet.signTransaction(tx);
+      sig = await this.provider.connection.sendRawTransaction(walletSigned.serialize());
     } else {
       // Wallet signs — single popup for all 3 instructions
       const signed = await this.provider.wallet.signTransaction(tx);
