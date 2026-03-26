@@ -163,14 +163,45 @@ export function useSessionKey(): SessionKeyState {
   // Validate session token exists on-chain AND track ephemeral key balance
   useEffect(() => {
     if (!sessionTokenPda || !sessionKeypair || !connection) return;
-    const clearSession = () => {
-      console.log("🔑 Clearing invalid/underfunded session");
+
+    /** Refund remaining SOL from ephemeral key back to wallet (no wallet popup needed) */
+    const refundAndClear = async (balance: number) => {
+      const txFee = 5000;
+      if (authority && balance > txFee + 1000) {
+        try {
+          const refundIx = SystemProgram.transfer({
+            fromPubkey: sessionKeypair.publicKey,
+            toPubkey: authority,
+            lamports: balance - txFee,
+          });
+          const refundTx = new Transaction().add(refundIx);
+          refundTx.feePayer = sessionKeypair.publicKey;
+          refundTx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+          refundTx.sign(sessionKeypair);
+          const refundSig = await connection.sendRawTransaction(refundTx.serialize());
+          await connection.confirmTransaction(refundSig, "confirmed");
+          console.log("🔑 Auto-refunded", ((balance - txFee) / 1e9).toFixed(6), "SOL back to wallet:", refundSig);
+        } catch (err: any) {
+          console.warn("🔑 Auto-refund failed (funds may remain on ephemeral key):", err?.message?.slice(0, 80));
+        }
+      }
+      // Clear state + storage regardless
       setSessionKeypair(null);
       setSessionTokenPda(null);
       setExpiresAt(null);
       setSessionBalance(null);
       if (authority) localStorage.removeItem(STORAGE_KEY_PREFIX + authority.toBase58());
     };
+
+    const clearSession = () => {
+      console.log("🔑 Clearing invalid session (no balance to refund)");
+      setSessionKeypair(null);
+      setSessionTokenPda(null);
+      setExpiresAt(null);
+      setSessionBalance(null);
+      if (authority) localStorage.removeItem(STORAGE_KEY_PREFIX + authority.toBase58());
+    };
+
     const checkBalance = () => {
       Promise.all([
         connection.getAccountInfo(sessionTokenPda),
@@ -178,10 +209,15 @@ export function useSessionKey(): SessionKeyState {
       ]).then(([info, balance]) => {
         if (!info) {
           console.log("🔑 Session token PDA no longer exists on-chain");
-          clearSession();
+          if (balance > 6000) {
+            console.log("🔑 Refunding remaining", (balance / 1e9).toFixed(6), "SOL before clearing...");
+            refundAndClear(balance);
+          } else {
+            clearSession();
+          }
         } else if (balance < 4_000_000) {
-          console.log("🔑 Session key balance depleted:", balance, "lamports — session ended");
-          clearSession();
+          console.log("🔑 Session key balance low:", balance, "lamports — refunding & ending session");
+          refundAndClear(balance);
         } else {
           setSessionBalance(balance / 1e9);
           console.log("🔑 Session key balance:", (balance / 1e9).toFixed(4), "SOL");
