@@ -1368,6 +1368,59 @@ export type Shadowspace = {
       ]
     },
     {
+      "name": "migrateProfile",
+      "docs": [
+        "Resize an existing profile account to the current schema size.",
+        "This is needed when the Profile struct grows (e.g. adding follower/following counts)."
+      ],
+      "discriminator": [
+        224,
+        187,
+        132,
+        189,
+        185,
+        163,
+        183,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "processUndelegation",
       "discriminator": [
         196,

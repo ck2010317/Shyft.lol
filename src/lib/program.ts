@@ -205,8 +205,36 @@ export class ShyftClient {
     const user = this.provider.wallet.publicKey;
     const [profilePda] = getProfilePda(user);
 
+    // Try to migrate first if existing profile is undersized
+    try {
+      const acctInfo = await this.provider.connection.getAccountInfo(profilePda);
+      if (acctInfo && acctInfo.data.length < 8 + 437) {
+        // Account exists but is too small for new schema — migrate it
+        console.log("🔄 Existing profile needs migration, resizing...");
+        await this.migrateProfile();
+        console.log("✅ Profile migrated to new schema");
+        return "migrated";
+      }
+    } catch (e) {
+      // ignore — account may not exist yet
+    }
+
     const sig = await this.program.methods
       .createProfile(username, displayName, bio)
+      .accounts({
+        profile: profilePda,
+        user,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    return sig;
+  }
+
+  async migrateProfile(): Promise<string> {
+    const user = this.provider.wallet.publicKey;
+    const [profilePda] = getProfilePda(user);
+    const sig = await this.program.methods
+      .migrateProfile()
       .accounts({
         profile: profilePda,
         user,
@@ -220,7 +248,27 @@ export class ShyftClient {
     const [profilePda] = getProfilePda(owner);
     try {
       return await this.accounts.profile.fetch(profilePda);
-    } catch {
+    } catch (err: any) {
+      // Check if account exists but can't be deserialized (size mismatch from old schema)
+      try {
+        const acctInfo = await this.provider.connection.getAccountInfo(profilePda);
+        if (acctInfo && acctInfo.data.length > 0) {
+          // Account exists but deserialization failed — needs migration
+          // If this is OUR profile, auto-migrate
+          const wallet = this.provider.wallet.publicKey;
+          if (wallet && owner.equals(wallet)) {
+            console.log("🔄 Profile account exists but schema mismatch — auto-migrating...");
+            await this.migrateProfile();
+            // Retry fetch after migration
+            return await this.accounts.profile.fetch(profilePda);
+          }
+          // For other users, return a partial profile from raw data
+          console.warn("⚠️ Profile for", owner.toBase58().slice(0, 8), "needs migration (old schema)");
+          return null;
+        }
+      } catch {
+        // Account truly doesn't exist
+      }
       return null;
     }
   }
@@ -473,8 +521,32 @@ export class ShyftClient {
       }));
       rpcCache.set(cacheKey, result);
       return result;
-    } catch {
-      return [];
+    } catch (err) {
+      // If .all() fails due to schema mismatch on some accounts, fall back to raw fetch
+      console.warn("⚠️ getAllProfiles via Anchor failed (likely old-schema accounts), falling back to raw fetch");
+      try {
+        const programId = this.program.programId;
+        const accounts = await this.provider.connection.getProgramAccounts(programId, {
+          filters: [{ dataSize: 8 + 437 }], // Only fetch accounts matching new Profile::LEN
+        });
+        const result: any[] = [];
+        for (const acct of accounts) {
+          try {
+            const decoded = this.program.coder.accounts.decode("profile", acct.account.data);
+            result.push({
+              publicKey: acct.pubkey.toBase58(),
+              ...decoded,
+              owner: decoded.owner.toBase58(),
+            });
+          } catch {
+            // skip accounts that can't be decoded
+          }
+        }
+        rpcCache.set(cacheKey, result);
+        return result;
+      } catch {
+        return [];
+      }
     }
   }
 

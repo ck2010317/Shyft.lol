@@ -53,6 +53,16 @@ pub mod shadowspace {
         Ok(())
     }
 
+    /// Resize an existing profile account to the current schema size.
+    /// This is needed when the Profile struct grows (e.g. adding follower/following counts).
+    pub fn migrate_profile(ctx: Context<MigrateProfile>) -> Result<()> {
+        let profile = &mut ctx.accounts.profile;
+        // If follower_count / following_count were uninitialised (old schema),
+        // they'll deserialise as 0 after realloc, which is correct.
+        msg!("Profile migrated for {}, new size {}", profile.owner, 8 + Profile::LEN);
+        Ok(())
+    }
+
     pub fn update_profile_privacy(
         ctx: Context<UpdateProfilePrivacy>,
         is_private: bool,
@@ -414,6 +424,22 @@ pub mod shadowspace {
 #[derive(Accounts)]
 pub struct CreateProfile<'info> {
     #[account(init_if_needed, payer = user, space = 8 + Profile::LEN, seeds = [PROFILE_SEED, user.key().as_ref()], bump)]
+    pub profile: Account<'info, Profile>,
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct MigrateProfile<'info> {
+    #[account(
+        mut,
+        realloc = 8 + Profile::LEN,
+        realloc::payer = user,
+        realloc::zero = false,
+        seeds = [PROFILE_SEED, user.key().as_ref()],
+        bump,
+    )]
     pub profile: Account<'info, Profile>,
     #[account(mut)]
     pub user: Signer<'info>,
