@@ -37,36 +37,50 @@ export default function Header() {
     if (!connected || !publicKey) {
       setCurrentUser(null);
       setCheckedProfile(false);
+      setShowSetup(false);
       return;
     }
 
     // Check for existing on-chain profile
     if (program && !checkedProfile) {
-      program.getProfile(publicKey).then((profile: any) => {
-        setCheckedProfile(true);
-        if (profile && profile.username && profile.displayName) {
-          // Use on-chain profile
-          setCurrentUser({
-            publicKey: publicKey.toBase58(),
-            username: profile.username,
-            displayName: profile.displayName,
-            avatar: profile.avatarUrl || "🔒",
-            bio: profile.bio || "",
-            isPrivate: profile.isPrivate || false,
-            followerCount: Number(profile.followerCount?.toString() || 0),
-            followingCount: Number(profile.followingCount?.toString() || 0),
-            createdAt: Number(profile.createdAt?.toString() || Date.now()),
-            avatarUrl: profile.avatarUrl || "",
-            bannerUrl: profile.bannerUrl || "",
-          });
-        } else {
-          // No profile — show setup
-          setShowSetup(true);
-        }
-      }).catch(() => {
-        setCheckedProfile(true);
-        setShowSetup(true);
-      });
+      let retries = 0;
+      const checkProfile = () => {
+        program.getProfile(publicKey).then((profile: any) => {
+          setCheckedProfile(true);
+          if (profile && profile.username && profile.displayName) {
+            // Use on-chain profile
+            setCurrentUser({
+              publicKey: publicKey.toBase58(),
+              username: profile.username,
+              displayName: profile.displayName,
+              avatar: profile.avatarUrl || "🔒",
+              bio: profile.bio || "",
+              isPrivate: profile.isPrivate || false,
+              followerCount: Number(profile.followerCount?.toString() || 0),
+              followingCount: Number(profile.followingCount?.toString() || 0),
+              createdAt: Number(profile.createdAt?.toString() || Date.now()),
+              avatarUrl: profile.avatarUrl || "",
+              bannerUrl: profile.bannerUrl || "",
+            });
+            setShowSetup(false);
+          } else {
+            // No profile — show setup
+            setShowSetup(true);
+          }
+        }).catch((err) => {
+          console.warn("Profile check failed:", err?.message?.slice(0, 80));
+          retries++;
+          if (retries < 3) {
+            // Retry after a short delay — RPC might not be ready yet
+            setTimeout(checkProfile, 1500);
+          } else {
+            // After 3 retries, assume no profile
+            setCheckedProfile(true);
+            setShowSetup(true);
+          }
+        });
+      };
+      checkProfile();
     }
   }, [connected, publicKey, program, checkedProfile, setConnected, setCurrentUser]);
 
