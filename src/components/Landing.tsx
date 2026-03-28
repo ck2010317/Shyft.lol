@@ -358,7 +358,7 @@ export default function Landing() {
                 <span className="text-xl font-bold text-[#2563EB]">3</span>
               </div>
               <h4 className="text-sm font-semibold text-[#1A1A2E] mb-2">Only you hold the keys</h4>
-              <p className="text-xs text-[#64748B]">Sign in with email, Google, or your wallet. We create a secure embedded wallet for you — no extensions needed.</p>
+              <p className="text-xs text-[#64748B]">Sign in with email or your wallet. We create a secure embedded wallet for you — no extensions needed.</p>
             </div>
           </div>
         </div>
@@ -370,7 +370,7 @@ export default function Landing() {
           <Shield className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
         </div>
         <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#1A1A2E] mb-3">Ready to take back your privacy?</h3>
-        <p className="text-xs sm:text-sm text-[#64748B] mb-6 sm:mb-8 max-w-md mx-auto">Sign in with email, Google, Twitter, or your Solana wallet — and start using the first truly private social platform.</p>
+        <p className="text-xs sm:text-sm text-[#64748B] mb-6 sm:mb-8 max-w-md mx-auto">Sign in with email or your Solana wallet — and start using the first truly private social platform.</p>
         <button
           onClick={login}
           disabled={!ready}

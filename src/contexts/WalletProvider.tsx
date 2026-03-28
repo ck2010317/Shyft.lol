@@ -22,7 +22,8 @@ export default function WalletProvider({ children }: { children: React.ReactNode
           walletChainType: "solana-only",
           walletList: ["phantom", "solflare", "backpack", "detected_solana_wallets"],
         },
-        loginMethods: ["email", "google", "twitter", "wallet"],
+        // NOTE: enable "google" and "twitter" here once OAuth is configured in the Privy dashboard
+        loginMethods: ["email", "wallet"],
         embeddedWallets: {
           solana: {
             createOnLogin: "users-without-wallets",
