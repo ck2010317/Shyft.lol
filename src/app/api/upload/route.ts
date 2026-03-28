@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Image upload API route
- * Uploads images to imgbb (free image hosting)
+ * Uploads images to freeimage.host (free image hosting)
  * POST /api/upload with FormData containing "image" file
  * Returns { url: string } with the hosted image URL
  */
 
-const IMGBB_API_KEY = "f03fa38faabf60dbde37c64b4bc29dc3"; // free tier key
+const FREEIMAGE_API_KEY = "6d207e02198a847aa98d0a2a901485a5";
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,13 +33,13 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const base64 = Buffer.from(bytes).toString("base64");
 
-    // Upload to imgbb using URLSearchParams (more reliable from server-side)
+    // Upload to freeimage.host using URLSearchParams
     const body = new URLSearchParams();
-    body.append("key", IMGBB_API_KEY);
-    body.append("image", base64);
-    body.append("name", `shyft_${Date.now()}`);
+    body.append("key", FREEIMAGE_API_KEY);
+    body.append("source", base64);
+    body.append("format", "json");
 
-    const response = await fetch("https://api.imgbb.com/1/upload", {
+    const response = await fetch("https://freeimage.host/api/1/upload", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
@@ -47,15 +47,15 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
 
-    if (!data.success) {
-      console.error("imgbb error:", JSON.stringify(data));
-      return NextResponse.json({ error: "Upload to imgbb failed", details: data }, { status: 500 });
+    if (data.status_code !== 200) {
+      console.error("freeimage error:", JSON.stringify(data));
+      return NextResponse.json({ error: "Upload failed", details: data }, { status: 500 });
     }
 
     return NextResponse.json({
-      url: data.data.display_url,
-      thumb: data.data.thumb?.url || data.data.display_url,
-      delete_url: data.data.delete_url,
+      url: data.image.display_url || data.image.url,
+      thumb: data.image.thumb?.url || data.image.display_url || data.image.url,
+      delete_url: data.image.delete_url || "",
     });
   } catch (err: any) {
     console.error("Upload error:", err);

@@ -6,10 +6,7 @@ import {
   WalletProvider as SolanaWalletProvider,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { 
-  SolflareWalletAdapter,
-  CoinbaseWalletAdapter,
-} from "@solana/wallet-adapter-wallets";
+import { CoinbaseWalletAdapter } from "@solana/wallet-adapter-wallets";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -20,7 +17,6 @@ export default function WalletProvider({ children }: { children: React.ReactNode
   const endpoint = useMemo(() => HELIUS_DEVNET_RPC, []);
   const wallets = useMemo(
     () => [
-      new SolflareWalletAdapter(),
       new CoinbaseWalletAdapter(),
     ],
     []

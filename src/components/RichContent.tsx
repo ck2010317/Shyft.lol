@@ -243,7 +243,7 @@ function LinkPreview({ url }: { url: string }) {
   );
 }
 
-/* ═══ Image Upload — uploads to /api/upload (imgbb) ═══ */
+/* ═══ Image Upload — uploads to /api/upload (freeimage.host) ═══ */
 
 export async function uploadImage(file: File): Promise<string> {
   // Validate

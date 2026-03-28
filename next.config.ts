@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "i.ibb.co" },
       { protocol: "https", hostname: "**.imgbb.com" },
+      { protocol: "https", hostname: "iili.io" },
+      { protocol: "https", hostname: "**.iili.io" },
+      { protocol: "https", hostname: "freeimage.host" },
+      { protocol: "https", hostname: "**.freeimage.host" },
       { protocol: "https", hostname: "img.youtube.com" },
     ],
   },
