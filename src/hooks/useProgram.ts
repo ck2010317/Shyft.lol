@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useConnection, useWallet, useAnchorWallet } from "@solana/wallet-adapter-react";
+import { useConnection, useAnchorWallet } from "@/hooks/usePrivyWallet";
 import { AnchorProvider } from "@coral-xyz/anchor";
 import { ShyftClient } from "@/lib/program";
 

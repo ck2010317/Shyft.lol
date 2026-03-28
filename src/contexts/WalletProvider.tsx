@@ -1,32 +1,41 @@
 "use client";
 
-import React, { useMemo } from "react";
-import {
-  ConnectionProvider,
-  WalletProvider as SolanaWalletProvider,
-} from "@solana/wallet-adapter-react";
-import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { CoinbaseWalletAdapter } from "@solana/wallet-adapter-wallets";
+import React from "react";
+import { PrivyProvider } from "@privy-io/react-auth";
+import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 
-import "@solana/wallet-adapter-react-ui/styles.css";
-
-// Helius free-tier devnet RPC — much higher rate limits than api.devnet.solana.com
-const HELIUS_DEVNET_RPC = "https://devnet.helius-rpc.com/?api-key=2cf03460-f790-4350-a211-18086a3a3fd2";
+const solanaConnectors = toSolanaWalletConnectors({
+  shouldAutoConnect: true,
+});
 
 export default function WalletProvider({ children }: { children: React.ReactNode }) {
-  const endpoint = useMemo(() => HELIUS_DEVNET_RPC, []);
-  const wallets = useMemo(
-    () => [
-      new CoinbaseWalletAdapter(),
-    ],
-    []
-  );
-
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <SolanaWalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </SolanaWalletProvider>
-    </ConnectionProvider>
+    <PrivyProvider
+      appId="cmn36w5d1008c0cjmqphxqth6"
+      config={{
+        appearance: {
+          theme: "light",
+          accentColor: "#2563EB",
+          logo: "/favicon.svg",
+          landingHeader: "Welcome to Shyft",
+          loginMessage: "Sign in to access private social on Solana",
+          walletChainType: "solana-only",
+          walletList: ["phantom", "solflare", "backpack", "detected_solana_wallets"],
+        },
+        loginMethods: ["email", "google", "twitter", "wallet"],
+        embeddedWallets: {
+          solana: {
+            createOnLogin: "users-without-wallets",
+          },
+        },
+        externalWallets: {
+          solana: {
+            connectors: solanaConnectors,
+          },
+        },
+      }}
+    >
+      {children}
+    </PrivyProvider>
   );
 }

@@ -6,7 +6,7 @@ import { useAppStore } from "@/lib/store";
 import { toast } from "@/components/Toast";
 import { RichContent, MediaBar, uploadImage } from "@/components/RichContent";
 import { useProgram } from "@/hooks/useProgram";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet } from "@/hooks/usePrivyWallet";
 import { PublicKey } from "@solana/web3.js";
 import { ShyftClient, clearRpcCache, SessionOpts } from "@/lib/program";
 import { useSessionKey, SessionKeyState } from "@/hooks/useSessionKey";

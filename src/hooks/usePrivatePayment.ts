@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useConnection, useWallet } from "@/hooks/usePrivyWallet";
 import {
   PublicKey,
   Transaction,

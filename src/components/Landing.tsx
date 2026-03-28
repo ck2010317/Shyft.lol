@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Shield, MessageCircle, Wallet, Lock, Users, ArrowRight, Zap, Eye, EyeOff, ChevronRight, Sparkles } from "lucide-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { useWallet } from "@/hooks/usePrivyWallet";
 
 const features = [
   {
@@ -60,6 +60,7 @@ const features = [
 export default function Landing() {
   const [activeFeature, setActiveFeature] = useState(0);
   const [showApp, setShowApp] = useState(false);
+  const { login, ready } = useWallet();
 
   // Auto-cycle features every 4 seconds
   useEffect(() => {
@@ -86,7 +87,13 @@ export default function Landing() {
           <a href="https://explorer.solana.com/address/EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ?cluster=devnet" target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-1 text-xs text-[#64748B] hover:text-[#2563EB] transition-colors">
             <Zap className="w-3 h-3" /> On-Chain Program
           </a>
-          <WalletMultiButton />
+          <button
+            onClick={login}
+            disabled={!ready}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            Sign In
+          </button>
         </div>
       </nav>
 
@@ -112,7 +119,13 @@ export default function Landing() {
         {/* CTA */}
         <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 mt-6 sm:mt-8 w-full sm:w-auto">
           <div className="w-full sm:w-auto flex justify-center">
-            <WalletMultiButton />
+            <button
+              onClick={login}
+              disabled={!ready}
+              className="flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl transition-colors disabled:opacity-50 shadow-lg shadow-blue-200"
+            >
+              <Wallet className="w-4 h-4" /> Get Started
+            </button>
           </div>
           <button
             onClick={() => {
@@ -345,7 +358,7 @@ export default function Landing() {
                 <span className="text-xl font-bold text-[#2563EB]">3</span>
               </div>
               <h4 className="text-sm font-semibold text-[#1A1A2E] mb-2">Only you hold the keys</h4>
-              <p className="text-xs text-[#64748B]">Your wallet = your identity. No email, no phone, no KYC. Connect and you&apos;re in.</p>
+              <p className="text-xs text-[#64748B]">Sign in with email, Google, or your wallet. We create a secure embedded wallet for you — no extensions needed.</p>
             </div>
           </div>
         </div>
@@ -357,8 +370,14 @@ export default function Landing() {
           <Shield className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
         </div>
         <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#1A1A2E] mb-3">Ready to take back your privacy?</h3>
-        <p className="text-xs sm:text-sm text-[#64748B] mb-6 sm:mb-8 max-w-md mx-auto">Connect your Solana wallet and start using the first truly private social platform.</p>
-        <WalletMultiButton />
+        <p className="text-xs sm:text-sm text-[#64748B] mb-6 sm:mb-8 max-w-md mx-auto">Sign in with email, Google, Twitter, or your Solana wallet — and start using the first truly private social platform.</p>
+        <button
+          onClick={login}
+          disabled={!ready}
+          className="flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl transition-colors disabled:opacity-50 shadow-lg shadow-blue-200 mx-auto"
+        >
+          <Wallet className="w-4 h-4" /> Get Started — It&apos;s Free
+        </button>
         <p className="text-[10px] text-[#94A3B8] mt-4">
           Program: EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ · Devnet
         </p>

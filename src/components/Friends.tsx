@@ -5,7 +5,7 @@ import { Search, UserPlus, UserMinus, UserCheck, Users, RefreshCw, Globe } from 
 import { useAppStore } from "@/lib/store";
 import { toast } from "@/components/Toast";
 import { useProgram } from "@/hooks/useProgram";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet } from "@/hooks/usePrivyWallet";
 import { PublicKey } from "@solana/web3.js";
 import { clearRpcCache } from "@/lib/program";
 

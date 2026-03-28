@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { useProgram } from "@/hooks/useProgram";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet } from "@/hooks/usePrivyWallet";
 import { PublicKey } from "@solana/web3.js";
 import { toast } from "@/components/Toast";
 import { RichContent } from "@/components/RichContent";

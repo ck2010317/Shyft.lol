@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet } from "@/hooks/usePrivyWallet";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import Header from "@/components/Header";

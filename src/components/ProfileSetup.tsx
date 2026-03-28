@@ -5,7 +5,7 @@ import { Shield, User, AtSign, FileText, Loader2 } from "lucide-react";
 import { useProgram } from "@/hooks/useProgram";
 import { useAppStore } from "@/lib/store";
 import { toast } from "@/components/Toast";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet } from "@/hooks/usePrivyWallet";
 
 interface ProfileSetupProps {
   onComplete: () => void;

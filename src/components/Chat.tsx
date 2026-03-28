@@ -5,7 +5,7 @@ import { Send, ArrowLeft, DollarSign, Lock, Shield, Search, RefreshCw, Plus, Mes
 import { useProgram } from "@/hooks/useProgram";
 import { usePrivatePayment } from "@/hooks/usePrivatePayment";
 import { toast } from "@/components/Toast";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet } from "@/hooks/usePrivyWallet";
 import { PublicKey } from "@solana/web3.js";
 
 function timeAgo(timestamp: number): string {

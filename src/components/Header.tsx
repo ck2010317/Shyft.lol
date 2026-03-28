@@ -1,8 +1,7 @@
 "use client";
 
-import { Shield } from "lucide-react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { Shield, LogOut, Wallet } from "lucide-react";
+import { useWallet } from "@/hooks/usePrivyWallet";
 import { useAppStore } from "@/lib/store";
 import { useProgram } from "@/hooks/useProgram";
 import { useEffect, useState } from "react";
@@ -28,7 +27,7 @@ const subtitles: Record<string, string> = {
 
 export default function Header() {
   const { activeTab, setCurrentUser, setConnected } = useAppStore();
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, login, logout, ready } = useWallet();
   const program = useProgram();
   const [showSetup, setShowSetup] = useState(false);
   const [checkedProfile, setCheckedProfile] = useState(false);
@@ -86,7 +85,24 @@ export default function Header() {
             </div>
           </div>
           <div className="flex-shrink-0 ml-2">
-            <WalletMultiButton />
+            {connected ? (
+              <button
+                onClick={logout}
+                className="flex items-center gap-2 px-3 py-2 text-xs font-medium bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#64748B] rounded-lg transition-colors"
+              >
+                <Wallet className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}</span>
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <button
+                onClick={login}
+                disabled={!ready}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                Sign In
+              </button>
+            )}
           </div>
         </div>
       </header>

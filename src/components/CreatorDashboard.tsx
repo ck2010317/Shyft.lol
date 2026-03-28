@@ -39,7 +39,7 @@ import {
 } from "recharts";
 import { useAppStore } from "@/lib/store";
 import { useProgram } from "@/hooks/useProgram";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet } from "@/hooks/usePrivyWallet";
 import type { Payment } from "@/types";
 
 /* ──────────────────── helpers ──────────────────── */
