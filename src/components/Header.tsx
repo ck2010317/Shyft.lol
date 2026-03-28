@@ -4,7 +4,7 @@ import { Shield, LogOut, Wallet } from "lucide-react";
 import { useWallet } from "@/hooks/usePrivyWallet";
 import { useAppStore } from "@/lib/store";
 import { useProgram } from "@/hooks/useProgram";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import ProfileSetup from "@/components/ProfileSetup";
 
 const titles: Record<string, string> = {
@@ -30,27 +30,39 @@ export default function Header() {
   const { publicKey, connected, login, logout, ready } = useWallet();
   const program = useProgram();
   const [showSetup, setShowSetup] = useState(false);
-  const [checkedProfile, setCheckedProfile] = useState(false);
+  const checkingRef = useRef(false);
+  const checkedWalletRef = useRef<string | null>(null);
 
   useEffect(() => {
     setConnected(connected);
+
+    // Don't reset anything while Privy is still loading
+    if (!ready) return;
+
     if (!connected || !publicKey) {
       setCurrentUser(null);
-      setCheckedProfile(false);
+      checkedWalletRef.current = null;
+      checkingRef.current = false;
       setShowSetup(false);
       return;
     }
 
+    const walletAddr = publicKey.toBase58();
+
+    // Already checked this exact wallet — skip
+    if (checkedWalletRef.current === walletAddr) return;
+
     // Check for existing on-chain profile
-    if (program && !checkedProfile) {
+    if (program && !checkingRef.current) {
+      checkingRef.current = true;
       let retries = 0;
       const checkProfile = () => {
         program.getProfile(publicKey).then((profile: any) => {
-          setCheckedProfile(true);
+          checkedWalletRef.current = walletAddr;
+          checkingRef.current = false;
           if (profile && profile.username && profile.displayName) {
-            // Use on-chain profile
             setCurrentUser({
-              publicKey: publicKey.toBase58(),
+              publicKey: walletAddr,
               username: profile.username,
               displayName: profile.displayName,
               avatar: profile.avatarUrl || "🔒",
@@ -64,25 +76,23 @@ export default function Header() {
             });
             setShowSetup(false);
           } else {
-            // No profile — show setup
             setShowSetup(true);
           }
         }).catch((err) => {
           console.warn("Profile check failed:", err?.message?.slice(0, 80));
           retries++;
           if (retries < 3) {
-            // Retry after a short delay — RPC might not be ready yet
             setTimeout(checkProfile, 1500);
           } else {
-            // After 3 retries, assume no profile
-            setCheckedProfile(true);
+            checkedWalletRef.current = walletAddr;
+            checkingRef.current = false;
             setShowSetup(true);
           }
         });
       };
       checkProfile();
     }
-  }, [connected, publicKey, program, checkedProfile, setConnected, setCurrentUser]);
+  }, [connected, publicKey, program, ready, setConnected, setCurrentUser]);
 
   return (
     <>
