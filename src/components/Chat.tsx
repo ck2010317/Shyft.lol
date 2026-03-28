@@ -97,7 +97,7 @@ export default function Chat() {
           address: addr,
           displayName: profile?.displayName || profile?.display_name || addr.slice(0, 4) + "..." + addr.slice(-4),
           username: profile?.username || addr.slice(0, 8),
-          avatar: isMutual ? "👥" : "👤",
+          avatar: profile?.avatarUrl || (isMutual ? "👥" : "👤"),
           isMutual,
         };
       });
@@ -499,9 +499,13 @@ export default function Chat() {
               }`}
             >
               <div className="relative">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#EBF4FF] to-[#E0F2FE] flex items-center justify-center text-xl">
-                  {chat.friend.avatar}
-                </div>
+                {chat.friend.avatar && chat.friend.avatar.startsWith('http') ? (
+                  <img src={chat.friend.avatar} alt={chat.friend.displayName} className="w-12 h-12 rounded-full object-cover" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#EBF4FF] to-[#E0F2FE] flex items-center justify-center text-xl">
+                    {chat.friend.avatar}
+                  </div>
+                )}
                 {chat.hasConversation ? (
                   <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#7C3AED] border-2 border-white flex items-center justify-center">
                     <Zap className="w-2 h-2 text-white" />
@@ -543,9 +547,13 @@ export default function Chat() {
               >
                 <ArrowLeft className="w-5 h-5 text-[#64748B]" />
               </button>
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#EBF4FF] to-[#E0F2FE] flex items-center justify-center text-base sm:text-lg flex-shrink-0">
-                {activeChat.friend.avatar}
-              </div>
+              {activeChat.friend.avatar && activeChat.friend.avatar.startsWith('http') ? (
+                <img src={activeChat.friend.avatar} alt={activeChat.friend.displayName} className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#EBF4FF] to-[#E0F2FE] flex items-center justify-center text-base sm:text-lg flex-shrink-0">
+                  {activeChat.friend.avatar}
+                </div>
+              )}
               <div className="flex-1">
                 <span className="font-semibold text-sm text-[#1A1A2E]">
                   {activeChat.friend.displayName}

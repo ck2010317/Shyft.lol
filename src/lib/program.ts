@@ -18,6 +18,7 @@ const DELEGATION_PROGRAM_ID = new PublicKey("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaA
 const TEE_VALIDATOR = new PublicKey("FnE6VJT5QNZdedZPnCoLsARgBwoE6DeJNjBs2H1gySXA");
 const MAGIC_PROGRAM = new PublicKey("Magic11111111111111111111111111111111111111");
 const MAGIC_CONTEXT = new PublicKey("MagicContext1111111111111111111111111111111");
+const MAGIC_VAULT = new PublicKey("MagicVau1t999999999999999999999999999999999");
 
 /** MagicBlock Ephemeral Rollup RPC endpoint */
 const ER_RPC_URL = "https://devnet.magicblock.app";
@@ -1455,6 +1456,8 @@ export class ShyftClient {
         profileOwner: profileOwnerPda,
         profileOther: profileOtherPda,
         conversation: conversationPda,
+        vault: MAGIC_VAULT,
+        magicProgram: MAGIC_PROGRAM,
       })
       .rpc({ skipPreflight: true });
     console.log(`✅ Ephemeral conversation created (capacity=${messageCapacity}):`, sig);
@@ -1475,6 +1478,8 @@ export class ShyftClient {
         profileSender: profileSenderPda,
         profileOther: profileOtherPda,
         conversation: conversationPda,
+        vault: MAGIC_VAULT,
+        magicProgram: MAGIC_PROGRAM,
       })
       .rpc({ skipPreflight: true });
     console.log("✅ Conversation extended:", sig);
@@ -1546,6 +1551,8 @@ export class ShyftClient {
           profileOwner: profileOwnerPda,
           profileOther: profileOtherPda,
           conversation: conversationPda,
+          vault: MAGIC_VAULT,
+          magicProgram: MAGIC_PROGRAM,
         })
         .rpc({ skipPreflight: true });
       console.log("✅ Conversation closed:", sig);
@@ -1756,5 +1763,6 @@ export {
   TEE_VALIDATOR,
   MAGIC_PROGRAM,
   MAGIC_CONTEXT,
+  MAGIC_VAULT,
   ER_RPC_URL,
 };
