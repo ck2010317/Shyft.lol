@@ -4,7 +4,7 @@ import { Shield, LogOut, Wallet } from "lucide-react";
 import { useWallet } from "@/hooks/usePrivyWallet";
 import { useAppStore } from "@/lib/store";
 import { useProgram } from "@/hooks/useProgram";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import ProfileSetup from "@/components/ProfileSetup";
 
 const titles: Record<string, string> = {
@@ -30,39 +30,41 @@ export default function Header() {
   const { publicKey, connected, login, logout, ready } = useWallet();
   const program = useProgram();
   const [showSetup, setShowSetup] = useState(false);
-  const checkingRef = useRef(false);
-  const checkedWalletRef = useRef<string | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
+  // Sync connected state
   useEffect(() => {
     setConnected(connected);
+  }, [connected, setConnected]);
 
-    // Don't reset anything while Privy is still loading
-    if (!ready) return;
-
+  // Profile check — runs once when wallet + program are both ready
+  useEffect(() => {
+    // Reset when disconnected
     if (!connected || !publicKey) {
-      setCurrentUser(null);
-      checkedWalletRef.current = null;
-      checkingRef.current = false;
+      setProfileLoaded(false);
       setShowSetup(false);
+      setCurrentUser(null);
       return;
     }
 
-    const walletAddr = publicKey.toBase58();
+    // Wait for program to be ready
+    if (!program || !ready) return;
 
-    // Already checked this exact wallet — skip
-    if (checkedWalletRef.current === walletAddr) return;
+    // Already loaded for this session
+    if (profileLoaded) return;
 
-    // Check for existing on-chain profile
-    if (program && !checkingRef.current) {
-      checkingRef.current = true;
-      let retries = 0;
-      const checkProfile = () => {
-        program.getProfile(publicKey).then((profile: any) => {
-          checkedWalletRef.current = walletAddr;
-          checkingRef.current = false;
+    let cancelled = false;
+    setProfileLoaded(true); // Set immediately to prevent duplicate calls
+
+    const loadProfile = async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const profile = await program.getProfile(publicKey);
+          if (cancelled) return;
           if (profile && profile.username && profile.displayName) {
+            console.log("✅ Profile found on-chain:", profile.username);
             setCurrentUser({
-              publicKey: walletAddr,
+              publicKey: publicKey.toBase58(),
               username: profile.username,
               displayName: profile.displayName,
               avatar: profile.avatarUrl || "🔒",
@@ -75,24 +77,27 @@ export default function Header() {
               bannerUrl: profile.bannerUrl || "",
             });
             setShowSetup(false);
+            return;
           } else {
-            setShowSetup(true);
+            console.log("📝 No profile found — showing setup");
+            if (!cancelled) setShowSetup(true);
+            return;
           }
-        }).catch((err) => {
-          console.warn("Profile check failed:", err?.message?.slice(0, 80));
-          retries++;
-          if (retries < 3) {
-            setTimeout(checkProfile, 1500);
-          } else {
-            checkedWalletRef.current = walletAddr;
-            checkingRef.current = false;
-            setShowSetup(true);
-          }
-        });
-      };
-      checkProfile();
-    }
-  }, [connected, publicKey, program, ready, setConnected, setCurrentUser]);
+        } catch (err: any) {
+          console.warn(`Profile check attempt ${attempt + 1} failed:`, err?.message?.slice(0, 60));
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+      // All retries failed
+      if (!cancelled) {
+        console.warn("❌ Profile check failed after 3 attempts — showing setup");
+        setShowSetup(true);
+      }
+    };
+
+    loadProfile();
+    return () => { cancelled = true; };
+  }, [connected, publicKey, program, ready, profileLoaded, setCurrentUser]);
 
   return (
     <>
