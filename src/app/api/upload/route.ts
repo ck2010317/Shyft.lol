@@ -33,22 +33,23 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const base64 = Buffer.from(bytes).toString("base64");
 
-    // Upload to imgbb
-    const imgbbForm = new FormData();
-    imgbbForm.append("key", IMGBB_API_KEY);
-    imgbbForm.append("image", base64);
-    imgbbForm.append("name", `shyft_${Date.now()}`);
+    // Upload to imgbb using URLSearchParams (more reliable from server-side)
+    const body = new URLSearchParams();
+    body.append("key", IMGBB_API_KEY);
+    body.append("image", base64);
+    body.append("name", `shyft_${Date.now()}`);
 
     const response = await fetch("https://api.imgbb.com/1/upload", {
       method: "POST",
-      body: imgbbForm,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
     });
 
     const data = await response.json();
 
     if (!data.success) {
-      console.error("imgbb error:", data);
-      return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+      console.error("imgbb error:", JSON.stringify(data));
+      return NextResponse.json({ error: "Upload to imgbb failed", details: data }, { status: 500 });
     }
 
     return NextResponse.json({
