@@ -251,20 +251,27 @@ export class ShyftClient {
     try {
       return await this.accounts.profile.fetch(profilePda);
     } catch (err: any) {
-      // Check if account exists but can't be deserialized (size mismatch from old schema)
+      // Check if account exists but can't be deserialized (size mismatch or delegated)
       try {
         const acctInfo = await this.provider.connection.getAccountInfo(profilePda);
         if (acctInfo && acctInfo.data.length > 0) {
-          // Account exists but deserialization failed — needs migration
+          // If account is delegated to MagicBlock, fetch from ER instead
+          if (acctInfo.owner.equals(DELEGATION_PROGRAM_ID)) {
+            console.log("🔗 Profile delegated to ER — fetching from MagicBlock...");
+            try {
+              const erAccount = await (this.erProgram.account as any).profile.fetch(profilePda);
+              return erAccount;
+            } catch {
+              console.warn("⚠️ Failed to fetch delegated profile from ER");
+            }
+          }
           // If this is OUR profile, auto-migrate
           const wallet = this.provider.wallet.publicKey;
           if (wallet && owner.equals(wallet)) {
             console.log("🔄 Profile account exists but schema mismatch — auto-migrating...");
             await this.migrateProfile();
-            // Retry fetch after migration
             return await this.accounts.profile.fetch(profilePda);
           }
-          // For other users, return a partial profile from raw data
           console.warn("⚠️ Profile for", owner.toBase58().slice(0, 8), "needs migration (old schema)");
           return null;
         }
@@ -532,40 +539,49 @@ export class ShyftClient {
     if (cached) return cached;
 
     try {
-      const allProfiles = await this.accounts.profile.all();
-      const result = allProfiles.map((p: any) => ({
-        publicKey: p.publicKey.toBase58(),
-        ...p.account,
-        owner: p.account.owner.toBase58(),
-      }));
-      rpcCache.set(cacheKey, result);
-      return result;
-    } catch (err) {
-      // If .all() fails due to schema mismatch on some accounts, fall back to raw fetch
-      console.warn("⚠️ getAllProfiles via Anchor failed (likely old-schema accounts), falling back to raw fetch");
+      // Fetch non-delegated profiles from main chain
+      let result: any[] = [];
       try {
-        const programId = this.program.programId;
-        const accounts = await this.provider.connection.getProgramAccounts(programId, {
-          filters: [{ dataSize: 8 + 437 }], // Only fetch accounts matching new Profile::LEN
+        const allProfiles = await this.accounts.profile.all();
+        result = allProfiles.map((p: any) => ({
+          publicKey: p.publicKey.toBase58(),
+          ...p.account,
+          owner: p.account.owner.toBase58(),
+        }));
+      } catch {
+        console.warn("⚠️ getAllProfiles via Anchor failed, using raw fetch");
+      }
+
+      // Also check for delegated profiles (owned by delegation program)
+      try {
+        const delegatedAccounts = await this.provider.connection.getProgramAccounts(DELEGATION_PROGRAM_ID, {
+          filters: [{ dataSize: 315 }], // Profile account size (8 disc + 307 LEN)
         });
-        const result: any[] = [];
-        for (const acct of accounts) {
+        const knownOwners = new Set(result.map(p => p.owner));
+        for (const acct of delegatedAccounts) {
           try {
             const decoded = this.program.coder.accounts.decode("profile", acct.account.data);
-            result.push({
-              publicKey: acct.pubkey.toBase58(),
-              ...decoded,
-              owner: decoded.owner.toBase58(),
-            });
+            const ownerStr = decoded.owner.toBase58();
+            if (!knownOwners.has(ownerStr)) {
+              result.push({
+                publicKey: acct.pubkey.toBase58(),
+                ...decoded,
+                owner: ownerStr,
+              });
+              knownOwners.add(ownerStr);
+            }
           } catch {
-            // skip accounts that can't be decoded
+            // Not a profile account — skip
           }
         }
-        rpcCache.set(cacheKey, result);
-        return result;
-      } catch {
-        return [];
+      } catch (erErr) {
+        console.warn("⚠️ Failed to fetch delegated profiles:", (erErr as any)?.message?.slice(0, 60));
       }
+
+      rpcCache.set(cacheKey, result);
+      return result;
+    } catch {
+      return [];
     }
   }
 
