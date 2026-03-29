@@ -193,7 +193,14 @@ export function useNotifications() {
       }
 
       // ─── Reposts of my content ───
-      const myUsername = currentUser?.username?.toLowerCase() || "";
+      // Use username from currentUser OR from the on-chain profile we just fetched
+      const myProfile = profileMap[myAddr];
+      const myUsername = (
+        currentUser?.username ||
+        myProfile?.username ||
+        ""
+      ).toLowerCase();
+
       if (myUsername) {
         for (const p of posts) {
           if (p.author === myAddr) continue; // skip my own posts
