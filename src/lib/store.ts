@@ -52,6 +52,12 @@ interface AppState {
   likedPosts: string[]; // array of post publicKeys the user has liked
   addLikedPost: (postKey: string) => void;
 
+  // Profile viewing
+  viewingProfile: string | null; // wallet address of user being viewed, null = own profile
+  setViewingProfile: (addr: string | null) => void;
+  /** Navigate to a user's profile: sets viewingProfile and switches to profile tab */
+  navigateToProfile: (walletAddress: string) => void;
+
   // Active tab
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -207,6 +213,11 @@ export const useAppStore = create<AppState>()(
   addLikedPost: (postKey) => set((state) => ({
     likedPosts: state.likedPosts.includes(postKey) ? state.likedPosts : [...state.likedPosts, postKey],
   })),
+
+  // Profile viewing
+  viewingProfile: null,
+  setViewingProfile: (addr) => set({ viewingProfile: addr }),
+  navigateToProfile: (walletAddress) => set({ viewingProfile: walletAddress, activeTab: "profile" }),
 
   // Navigation
   activeTab: "feed",

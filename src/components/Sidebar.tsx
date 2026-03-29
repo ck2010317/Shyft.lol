@@ -13,8 +13,13 @@ const navItems = [
 ];
 
 export default function Sidebar() {
-  const { activeTab, setActiveTab, conversations } = useAppStore();
+  const { activeTab, setActiveTab, setViewingProfile, conversations } = useAppStore();
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
+
+  const handleNavClick = (tabId: string) => {
+    if (tabId === "profile") setViewingProfile(null); // always show own profile from nav
+    setActiveTab(tabId);
+  };
 
   return (
     <aside className="hidden md:flex flex-col w-64 h-screen bg-white border-r border-[#E2E8F0] fixed left-0 top-0 z-30">
@@ -37,7 +42,7 @@ export default function Sidebar() {
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => handleNavClick(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                 isActive
                   ? "bg-[#2563EB] text-white shadow-md shadow-blue-200"

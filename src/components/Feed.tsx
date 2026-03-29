@@ -62,7 +62,7 @@ function OnChainPostCard({
   onRepost: (content: string) => void;
   sessionState: SessionKeyState;
 }) {
-  const { likedPosts, addLikedPost, isConnected, currentUser } = useAppStore();
+  const { likedPosts, addLikedPost, isConnected, currentUser, navigateToProfile } = useAppStore();
   const { publicKey: walletKey } = useWallet();
   const [showComments, setShowComments] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
@@ -236,10 +236,15 @@ function OnChainPostCard({
     <div className="bg-white rounded-2xl border border-[#E2E8F0] p-3.5 sm:p-5 mb-3 sm:mb-4 animate-fade-in hover:shadow-md transition-shadow duration-300">
       {/* Author */}
       <div className="flex items-center gap-2.5 sm:gap-3 mb-3">
+        <button
+          type="button"
+          onClick={() => navigateToProfile(post.author)}
+          className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0 text-left group"
+        >
         {profile?.avatarUrl ? (
-          <img src={profile.avatarUrl} alt={displayName} className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0" />
+          <img src={profile.avatarUrl} alt={displayName} className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0 group-hover:ring-2 group-hover:ring-[#2563EB]/30 transition-all" />
         ) : (
-          <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-lg sm:text-xl border-2 border-white shadow-sm flex-shrink-0 ${
+          <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-lg sm:text-xl border-2 border-white shadow-sm flex-shrink-0 group-hover:ring-2 group-hover:ring-[#2563EB]/30 transition-all ${
             isMe
               ? "bg-gradient-to-br from-[#EBF4FF] to-[#E0F2FE]"
               : "bg-gradient-to-br from-[#F0FDF4] to-[#DCFCE7]"
@@ -249,9 +254,9 @@ function OnChainPostCard({
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-            <span className="font-semibold text-[#1A1A2E] text-sm truncate">{displayName}</span>
+            <span className="font-semibold text-[#1A1A2E] text-sm truncate group-hover:text-[#2563EB] transition-colors">{displayName}</span>
             <BadgeCheck className={`w-3.5 h-3.5 flex-shrink-0 ${GOLD_BADGE_USERNAMES.includes(realUsername.toLowerCase()) ? "text-[#F59E0B]" : "text-[#2563EB]"}`} />
-            <span className="text-xs text-[#94A3B8] truncate">@{username}</span>
+            <span className="text-xs text-[#94A3B8] truncate group-hover:text-[#2563EB]/70 transition-colors">@{username}</span>
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className="text-xs text-[#94A3B8]">
@@ -267,6 +272,7 @@ function OnChainPostCard({
             )}
           </div>
         </div>
+        </button>
       </div>
 
       {/* Content */}
@@ -277,11 +283,18 @@ function OnChainPostCard({
             const parts = post.content.split("|");
             const rtAuthor = parts[1] || "";
             const rtContent = parts.slice(2).join("|");
+            // Find the wallet address for the repost author so we can navigate to their profile
+            const rtUsername = rtAuthor.replace(/^@/, "").toLowerCase();
+            const rtWallet = Object.entries(profileMap).find(([, p]) => p?.username?.toLowerCase() === rtUsername)?.[0];
             return (
               <div>
                 <div className="flex items-center gap-1.5 text-[13px] text-[#64748B] mb-2">
                   <Repeat2 className="w-3.5 h-3.5" />
-                  <span>Reposted from <span className="font-semibold text-[#1A1A2E]">{rtAuthor}</span></span>
+                  <span>Reposted from {rtWallet ? (
+                    <button type="button" onClick={() => navigateToProfile(rtWallet)} className="font-semibold text-[#1A1A2E] hover:text-[#2563EB] transition-colors">{rtAuthor}</button>
+                  ) : (
+                    <span className="font-semibold text-[#1A1A2E]">{rtAuthor}</span>
+                  )}</span>
                 </div>
                 <div className="border border-[#E2E8F0] rounded-xl px-4 py-3 bg-[#F8FAFC]">
                   <RichContent content={rtContent} />
@@ -294,11 +307,17 @@ function OnChainPostCard({
           if (legacyMatch) {
             const rtAuthor = legacyMatch[1];
             const rtContent = legacyMatch[2].replace(/\\n/g, '').replace(/^"|"$/g, '').trim();
+            const rtUsername = rtAuthor.replace(/^@/, "").toLowerCase();
+            const rtWallet = Object.entries(profileMap).find(([, p]) => p?.username?.toLowerCase() === rtUsername)?.[0];
             return (
               <div>
                 <div className="flex items-center gap-1.5 text-[13px] text-[#64748B] mb-2">
                   <Repeat2 className="w-3.5 h-3.5" />
-                  <span>Reposted from <span className="font-semibold text-[#1A1A2E]">{rtAuthor}</span></span>
+                  <span>Reposted from {rtWallet ? (
+                    <button type="button" onClick={() => navigateToProfile(rtWallet)} className="font-semibold text-[#1A1A2E] hover:text-[#2563EB] transition-colors">{rtAuthor}</button>
+                  ) : (
+                    <span className="font-semibold text-[#1A1A2E]">{rtAuthor}</span>
+                  )}</span>
                 </div>
                 <div className="border border-[#E2E8F0] rounded-xl px-4 py-3 bg-[#F8FAFC]">
                   <RichContent content={rtContent} />
@@ -465,18 +484,20 @@ function OnChainPostCard({
             const isMyComment = comment.author === myAddr;
             return (
               <div key={comment.publicKey} className="flex gap-2 animate-fade-in">
+                <button type="button" onClick={() => navigateToProfile(comment.author)} className="flex-shrink-0 group">
                 {commenterProfile?.avatarUrl ? (
-                  <img src={commenterProfile.avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                  <img src={commenterProfile.avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0 group-hover:ring-2 group-hover:ring-[#2563EB]/30 transition-all" />
                 ) : (
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 group-hover:ring-2 group-hover:ring-[#2563EB]/30 transition-all ${
                     isMyComment ? "bg-[#EFF6FF] text-[#2563EB]" : "bg-[#F1F5F9] text-[#64748B]"
                   }`}>
                     {commenterName.charAt(0)?.toUpperCase() || "?"}
                   </div>
                 )}
+                </button>
                 <div className="flex-1 bg-[#F8FAFC] rounded-xl px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-[#1A1A2E]">{isMyComment ? "You" : commenterName}</span>
+                    <button type="button" onClick={() => navigateToProfile(comment.author)} className="text-xs font-semibold text-[#1A1A2E] hover:text-[#2563EB] transition-colors">{isMyComment ? "You" : commenterName}</button>
                     <span className="text-[10px] text-[#94A3B8]">
                       {Number(comment.createdAt) > 0 ? timeAgo(Number(comment.createdAt) * 1000) : "recently"}
                     </span>

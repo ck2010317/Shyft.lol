@@ -98,10 +98,15 @@ const REACTIONS = [
    ═══════════════════════════════════════════════════════════════ */
 
 export default function Profile() {
-  const { currentUser, setCurrentUser, isConnected } = useAppStore();
+  const { currentUser, setCurrentUser, isConnected, viewingProfile, setViewingProfile, setActiveTab: setAppTab } = useAppStore();
   const program = useProgram();
   const { publicKey } = useWallet();
   const sessionState = useSessionKey();
+
+  // Are we viewing someone else's profile?
+  const isViewingOther = !!(viewingProfile && publicKey && viewingProfile !== publicKey.toBase58());
+  const targetAddress = isViewingOther ? viewingProfile! : publicKey?.toBase58() || "";
+  const targetPubkey = (() => { try { return targetAddress ? new PublicKey(targetAddress) : null; } catch { return null; } })();
 
   /* state */
   const [loading, setLoading] = useState(true);
@@ -166,7 +171,7 @@ export default function Profile() {
       return;
     }
     fetchProfile();
-  }, [program, publicKey]);
+  }, [program, publicKey, viewingProfile]);
 
   // Fetch wallet SOL balance
   const fetchBalance = useCallback(async () => {
@@ -212,25 +217,26 @@ export default function Profile() {
   }
 
   async function fetchProfile() {
-    if (!program || !publicKey) return;
+    if (!program || !targetPubkey) return;
     setLoading(true);
     try {
-      const p = await program.getProfile(publicKey);
+      const p = await program.getProfile(targetPubkey);
       setOnChainProfile(p);
       // Fetch real follower/following counts from FollowAccount PDAs (source of truth)
       const [followers, following] = await Promise.all([
-        program.getFollowers(publicKey),
-        program.getFollowing(publicKey),
+        program.getFollowers(targetPubkey),
+        program.getFollowing(targetPubkey),
       ]);
       setRealFollowerCount(followers.length);
       setRealFollowingCount(following.length);
 
-      if (p) {
+      if (p && !isViewingOther) {
+        // Only update currentUser when viewing own profile
         // Validate createdAt — must be after 2020 (1577836800) to be real
         const rawTs = Number(p.createdAt);
         const validTs = rawTs > 1577836800 ? rawTs * 1000 : Date.now();
         setCurrentUser({
-          publicKey: publicKey.toBase58(),
+          publicKey: publicKey!.toBase58(),
           username: p.username,
           displayName: p.displayName,
           avatar: p.avatarUrl || "",
@@ -246,7 +252,7 @@ export default function Profile() {
       // fetch posts
       const posts = await program.getAllPostsIncludingDelegated();
       const mine = posts
-        .filter((x) => x.author === publicKey.toBase58())
+        .filter((x) => x.author === targetAddress)
         .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
       setMyPosts(mine);
 
@@ -376,14 +382,60 @@ export default function Profile() {
   const rawCreatedAt = Number(onChainProfile?.createdAt || 0);
   const joinDate = rawCreatedAt > 1577836800
     ? formatDate(rawCreatedAt * 1000)
-    : currentUser?.createdAt && currentUser.createdAt > 1577836800000
+    : !isViewingOther && currentUser?.createdAt && currentUser.createdAt > 1577836800000
     ? formatDate(currentUser.createdAt)
     : formatDate(Date.now());
-  const profileName = onChainProfile?.displayName || currentUser?.displayName || "Anonymous";
-  const profileUsername = onChainProfile?.username || currentUser?.username || "";
-  const profileBio = onChainProfile?.bio || currentUser?.bio || "";
-  const avatarUrl = onChainProfile?.avatarUrl || currentUser?.avatarUrl || "";
-  const bannerUrl = onChainProfile?.bannerUrl || currentUser?.bannerUrl || "";
+  const profileName = isViewingOther
+    ? (onChainProfile?.displayName || "Anonymous")
+    : (onChainProfile?.displayName || currentUser?.displayName || "Anonymous");
+  const profileUsername = isViewingOther
+    ? (onChainProfile?.username || "")
+    : (onChainProfile?.username || currentUser?.username || "");
+  const profileBio = isViewingOther
+    ? (onChainProfile?.bio || "")
+    : (onChainProfile?.bio || currentUser?.bio || "");
+  const avatarUrl = isViewingOther
+    ? (onChainProfile?.avatarUrl || "")
+    : (onChainProfile?.avatarUrl || currentUser?.avatarUrl || "");
+  const bannerUrl = isViewingOther
+    ? (onChainProfile?.bannerUrl || "")
+    : (onChainProfile?.bannerUrl || currentUser?.bannerUrl || "");
+
+  /* ── Follow state for viewing other profiles ── */
+  const [isFollowingUser, setIsFollowingUser] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isViewingOther || !program || !targetPubkey) return;
+    program.isFollowing(targetPubkey).then(setIsFollowingUser).catch(() => {});
+  }, [isViewingOther, program, targetAddress]);
+
+  const handleFollowToggle = async () => {
+    if (!program || !targetPubkey || followLoading) return;
+    setFollowLoading(true);
+    try {
+      if (isFollowingUser) {
+        await program.unfollowUser(targetPubkey);
+        toast("success", "Unfollowed", `You unfollowed @${profileUsername}`);
+        setIsFollowingUser(false);
+        setRealFollowerCount((c) => Math.max(0, c - 1));
+      } else {
+        await program.followUser(targetPubkey);
+        toast("success", "Following!", `You are now following @${profileUsername}`);
+        setIsFollowingUser(true);
+        setRealFollowerCount((c) => c + 1);
+      }
+    } catch (err: any) {
+      console.error("Follow error:", err);
+      toast("error", "Failed", err?.message?.slice(0, 80) || "Try again");
+    }
+    setFollowLoading(false);
+  };
+
+  const handleBackToFeed = () => {
+    setViewingProfile(null);
+    setAppTab("feed");
+  };
 
   // Gold badge for OG / founder accounts
   const isGoldBadge = GOLD_BADGE_USERNAMES.includes(profileUsername.toLowerCase());
@@ -526,7 +578,15 @@ export default function Profile() {
   return (
     <div className="max-w-[600px] mx-auto min-h-screen">
       {/* ── Top bar ── */}
-      <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-[#E2E8F0] px-4 py-2.5 flex items-center gap-6">
+      <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-[#E2E8F0] px-4 py-2.5 flex items-center gap-4">
+        {isViewingOther && (
+          <button
+            onClick={handleBackToFeed}
+            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-[#F1F5F9] transition-colors flex-shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5 text-[#1A1A2E]" />
+          </button>
+        )}
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-extrabold text-[#1A1A2E] truncate leading-tight">
             {profileName}
@@ -552,7 +612,7 @@ export default function Profile() {
 
       {/* ── Profile Info Section ── */}
       <div className="bg-white border-x border-[#E2E8F0] px-4 pb-4">
-        {/* Avatar + Edit button row */}
+        {/* Avatar + Edit/Follow button row */}
         <div className="flex justify-between items-start">
           <div className="relative -mt-[42px]">
             {avatarUrl ? (
@@ -572,32 +632,59 @@ export default function Profile() {
             </div>
           </div>
           <div className="mt-3 flex gap-2">
-            <button
-              onClick={openEditModal}
-              className="px-4 py-1.5 rounded-full border border-[#E2E8F0] text-sm font-bold text-[#1A1A2E] hover:bg-[#F1F5F9] transition-colors"
-            >
-              Edit profile
-            </button>
-            <button
-              onClick={copyWallet}
-              className="w-9 h-9 rounded-full border border-[#E2E8F0] flex items-center justify-center hover:bg-[#F1F5F9] transition-colors"
-              title="Copy wallet address"
-            >
-              {copied ? (
-                <Check className="w-4 h-4 text-[#16A34A]" />
-              ) : (
-                <Copy className="w-4 h-4 text-[#64748B]" />
-              )}
-            </button>
-            <a
-              href={`https://explorer.solana.com/address/${publicKey?.toBase58()}?cluster=devnet`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-9 h-9 rounded-full border border-[#E2E8F0] flex items-center justify-center hover:bg-[#F1F5F9] transition-colors"
-              title="View on Solana Explorer"
-            >
-              <ExternalLink className="w-4 h-4 text-[#64748B]" />
-            </a>
+            {isViewingOther ? (
+              <>
+                <button
+                  onClick={handleFollowToggle}
+                  disabled={followLoading}
+                  className={`px-5 py-1.5 rounded-full text-sm font-bold transition-colors disabled:opacity-50 ${
+                    isFollowingUser
+                      ? "border border-[#E2E8F0] text-[#1A1A2E] hover:border-red-300 hover:text-red-500 hover:bg-red-50"
+                      : "bg-[#1A1A2E] text-white hover:bg-[#2A2A3E]"
+                  }`}
+                >
+                  {followLoading ? "..." : isFollowingUser ? "Following" : "Follow"}
+                </button>
+                <a
+                  href={`https://explorer.solana.com/address/${targetAddress}?cluster=devnet`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-9 h-9 rounded-full border border-[#E2E8F0] flex items-center justify-center hover:bg-[#F1F5F9] transition-colors"
+                  title="View on Solana Explorer"
+                >
+                  <ExternalLink className="w-4 h-4 text-[#64748B]" />
+                </a>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={openEditModal}
+                  className="px-4 py-1.5 rounded-full border border-[#E2E8F0] text-sm font-bold text-[#1A1A2E] hover:bg-[#F1F5F9] transition-colors"
+                >
+                  Edit profile
+                </button>
+                <button
+                  onClick={copyWallet}
+                  className="w-9 h-9 rounded-full border border-[#E2E8F0] flex items-center justify-center hover:bg-[#F1F5F9] transition-colors"
+                  title="Copy wallet address"
+                >
+                  {copied ? (
+                    <Check className="w-4 h-4 text-[#16A34A]" />
+                  ) : (
+                    <Copy className="w-4 h-4 text-[#64748B]" />
+                  )}
+                </button>
+                <a
+                  href={`https://explorer.solana.com/address/${publicKey?.toBase58()}?cluster=devnet`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-9 h-9 rounded-full border border-[#E2E8F0] flex items-center justify-center hover:bg-[#F1F5F9] transition-colors"
+                  title="View on Solana Explorer"
+                >
+                  <ExternalLink className="w-4 h-4 text-[#64748B]" />
+                </a>
+              </>
+            )}
           </div>
         </div>
 
@@ -631,7 +718,7 @@ export default function Profile() {
           </span>
           <span className="flex items-center gap-1 text-[13px] text-[#64748B]">
             <Shield className="w-3.5 h-3.5" />
-            {shortKey(publicKey?.toBase58() || "")}
+            {shortKey(targetAddress)}
           </span>
         </div>
 
@@ -650,7 +737,8 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* ── Wallet Management ── */}
+      {/* ── Wallet Management (own profile only) ── */}
+      {!isViewingOther && (
       <div className="bg-white border-x border-[#E2E8F0] px-4 py-4 border-b">
         <div className="bg-gradient-to-br from-[#F8FAFC] to-[#EFF6FF] rounded-2xl border border-[#E2E8F0] p-4">
           <div className="flex items-center justify-between mb-3">
@@ -758,6 +846,7 @@ export default function Profile() {
           </div>
         </div>
       </div>
+      )}
 
       {/* ── Tabs ── */}
       <div className="bg-white border-x border-[#E2E8F0] flex">

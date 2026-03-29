@@ -12,7 +12,11 @@ const navItems = [
 ];
 
 export default function MobileNav() {
-  const { activeTab, setActiveTab, conversations } = useAppStore();
+  const { activeTab, setActiveTab, setViewingProfile, conversations } = useAppStore();
+  const handleNavClick = (tabId: string) => {
+    if (tabId === "profile") setViewingProfile(null);
+    setActiveTab(tabId);
+  };
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   return (
@@ -24,7 +28,7 @@ export default function MobileNav() {
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => handleNavClick(item.id)}
               className={`touch-active relative flex flex-col items-center justify-center gap-0.5 min-w-[64px] min-h-[52px] py-2 px-3 rounded-xl transition-all duration-200 ${
                 isActive ? "text-[#2563EB]" : "text-[#94A3B8] active:text-[#64748B]"
               }`}
