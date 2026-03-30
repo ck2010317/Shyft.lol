@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { BagsSDK } from "@bagsfm/bags-sdk";
+import { BagsSDK, BAGS_FEE_SHARE_V2_PROGRAM_ID } from "@bagsfm/bags-sdk";
 
 /**
  * /api/bags — Bags API proxy for token launch, trading, fees, and analytics.
@@ -9,7 +9,7 @@ import { BagsSDK } from "@bagsfm/bags-sdk";
  * Frontend calls these routes and handles wallet signing.
  */
 
-const BAGS_API_KEY = process.env.BAGS_API_KEY || "";
+const BAGS_API_KEY = (process.env.BAGS_API_KEY || "").trim();
 const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
 const BAGS_PARTNER_CONFIG = "B94bGwVuX7tWX8VkkyBZLmQESJ537URMcJcVkF8tdi5T";
 
@@ -218,6 +218,12 @@ export async function POST(req: NextRequest) {
         }
 
         // Build the fee claimers array with Shyft partner config
+        const partnerWallet = new PublicKey(BAGS_PARTNER_CONFIG);
+        const [partnerConfigPda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("partner_config"), partnerWallet.toBuffer()],
+          new PublicKey(BAGS_FEE_SHARE_V2_PROGRAM_ID)
+        );
+
         const configResult = await sdk.config.createBagsFeeShareConfig({
           payer: new PublicKey(payerWallet),
           baseMint: new PublicKey(tokenMint),
@@ -225,7 +231,8 @@ export async function POST(req: NextRequest) {
             user: new PublicKey(fc.wallet),
             userBps: fc.bps,
           })),
-          partner: new PublicKey(BAGS_PARTNER_CONFIG),
+          partner: partnerWallet,
+          partnerConfig: partnerConfigPda,
         });
 
         const transactions = (configResult.transactions || []).map((tx: any) =>
