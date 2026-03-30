@@ -9,18 +9,18 @@ const solanaConnectors = toSolanaWalletConnectors({
   shouldAutoConnect: true,
 });
 
-const HELIUS_DEVNET = "https://devnet.helius-rpc.com/?api-key=2cf03460-f790-4350-a211-18086a3a3fd2";
+const HELIUS_MAINNET = "https://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1";
 
 const solanaRpcs = {
-  "solana:devnet": {
-    rpc: createSolanaRpc(HELIUS_DEVNET),
-    rpcSubscriptions: createSolanaRpcSubscriptions("wss://devnet.helius-rpc.com/?api-key=2cf03460-f790-4350-a211-18086a3a3fd2"),
-    blockExplorerUrl: "https://explorer.solana.com/?cluster=devnet",
-  },
   "solana:mainnet": {
-    rpc: createSolanaRpc("https://mainnet.helius-rpc.com/?api-key=2cf03460-f790-4350-a211-18086a3a3fd2"),
-    rpcSubscriptions: createSolanaRpcSubscriptions("wss://mainnet.helius-rpc.com/?api-key=2cf03460-f790-4350-a211-18086a3a3fd2"),
+    rpc: createSolanaRpc(HELIUS_MAINNET),
+    rpcSubscriptions: createSolanaRpcSubscriptions("wss://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1"),
     blockExplorerUrl: "https://explorer.solana.com",
+  },
+  "solana:devnet": {
+    rpc: createSolanaRpc("https://devnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1"),
+    rpcSubscriptions: createSolanaRpcSubscriptions("wss://devnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1"),
+    blockExplorerUrl: "https://explorer.solana.com/?cluster=devnet",
   },
 } as const;
 

@@ -10,15 +10,15 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useWallets as usePrivyWallets } from "@privy-io/react-auth/solana";
 import { Connection, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 
-/** Helius free-tier devnet RPC */
-export const HELIUS_DEVNET_RPC =
-  "https://devnet.helius-rpc.com/?api-key=2cf03460-f790-4350-a211-18086a3a3fd2";
+/** Helius mainnet RPC */
+export const HELIUS_MAINNET_RPC =
+  "https://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1";
 
-/** Shared connection (devnet via Helius) */
+/** Shared connection (mainnet via Helius) */
 let _sharedConnection: Connection | null = null;
 export function getSharedConnection(): Connection {
   if (!_sharedConnection) {
-    _sharedConnection = new Connection(HELIUS_DEVNET_RPC, "confirmed");
+    _sharedConnection = new Connection(HELIUS_MAINNET_RPC, "confirmed");
   }
   return _sharedConnection;
 }
