@@ -39,17 +39,27 @@
 /* ─── Surface / Card / White Backgrounds ─── */
 [data-theme="dark"] .bg-white,
 [data-theme="dark"] .bg-white\/80,
+[data-theme="dark"] .bg-white\/90,
 [data-theme="dark"] .bg-white\/95 {
   background-color: var(--color-surface) !important;
 }
 [data-theme="dark"] .bg-\[\#FAFBFC\] {
   background-color: var(--color-bg) !important;
 }
+[data-theme="dark"] .bg-\[\#FFFFFF\] {
+  background-color: var(--color-surface) !important;
+}
 [data-theme="dark"] .bg-\[\#F8FAFC\] {
   background-color: #151822 !important;
 }
 [data-theme="dark"] .bg-\[\#F1F5F9\] {
   background-color: #1E2130 !important;
+}
+[data-theme="dark"] .bg-\[\#E2E8F0\] {
+  background-color: #2A2D3A !important;
+}
+[data-theme="dark"] .bg-\[\#E5E7EB\] {
+  background-color: #2A2D3A !important;
 }
 
 /* ─── Tinted backgrounds (subtle surfaces) ─── */
@@ -68,6 +78,12 @@
 [data-theme="dark"] .bg-\[\#EBF4FF\] {
   background-color: rgba(37, 99, 235, 0.1) !important;
 }
+[data-theme="dark"] .bg-\[\#FEF2F2\] {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
+[data-theme="dark"] .bg-\[\#F0FDFA\] {
+  background-color: rgba(13, 148, 136, 0.12) !important;
+}
 
 /* Reaction tinted backgrounds */
 [data-theme="dark"] .bg-red-50 { background-color: rgba(239, 68, 68, 0.12) !important; }
@@ -83,6 +99,9 @@
 [data-theme="dark"] .bg-teal-50 { background-color: rgba(20, 184, 166, 0.12) !important; }
 [data-theme="dark"] .bg-teal-100 { background-color: rgba(20, 184, 166, 0.2) !important; }
 [data-theme="dark"] .bg-green-50 { background-color: rgba(22, 163, 74, 0.12) !important; }
+[data-theme="dark"] .bg-green-100 { background-color: rgba(22, 163, 74, 0.2) !important; }
+[data-theme="dark"] .bg-gray-50 { background-color: #151822 !important; }
+[data-theme="dark"] .bg-gray-100 { background-color: #1E2130 !important; }
 
 /* ─── Text Colors ─── */
 [data-theme="dark"] .text-\[\#1A1A2E\] {
@@ -112,6 +131,24 @@
 [data-theme="dark"] .text-\[\#16A34A\] {
   color: #4ADE80 !important;
 }
+[data-theme="dark"] .text-black {
+  color: #E8ECF4 !important;
+}
+[data-theme="dark"] .text-gray-500 {
+  color: #6B7280 !important;
+}
+[data-theme="dark"] .text-gray-600 {
+  color: #8B92A5 !important;
+}
+[data-theme="dark"] .text-gray-700 {
+  color: #A8B0C2 !important;
+}
+[data-theme="dark"] .text-gray-800 {
+  color: #C4CAD8 !important;
+}
+[data-theme="dark"] .text-gray-900 {
+  color: #E8ECF4 !important;
+}
 
 /* ─── Border Colors ─── */
 [data-theme="dark"] .border-\[\#E2E8F0\] {
@@ -126,19 +163,66 @@
 [data-theme="dark"] .border-\[\#FED7AA\] {
   border-color: rgba(234, 88, 12, 0.3) !important;
 }
+[data-theme="dark"] .border-\[\#BFDBFE\] {
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+[data-theme="dark"] .border-\[\#DDD6FE\] {
+  border-color: rgba(124, 58, 237, 0.3) !important;
+}
+[data-theme="dark"] .border-\[\#FECACA\] {
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+[data-theme="dark"] .border-\[\#99F6E4\] {
+  border-color: rgba(20, 184, 166, 0.3) !important;
+}
+[data-theme="dark"] .border-white {
+  border-color: var(--color-surface) !important;
+}
+[data-theme="dark"] .border-gray-200 {
+  border-color: #2A2D3A !important;
+}
+[data-theme="dark"] .border-gray-300 {
+  border-color: #2A2D3A !important;
+}
+[data-theme="dark"] .border-red-200 {
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
+[data-theme="dark"] .border-red-300 {
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+[data-theme="dark"] .border-\[\#DCFCE7\] {
+  border-color: rgba(22, 163, 74, 0.3) !important;
+}
+[data-theme="dark"] .border-\[\#DBEAFE\] {
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+/* ─── Focus ring in dark ─── */
+[data-theme="dark"] .focus\:ring-\[\#2563EB\]:focus {
+  --tw-ring-color: rgba(37, 99, 235, 0.5) !important;
+}
+[data-theme="dark"] .focus\:border-\[\#2563EB\]:focus {
+  border-color: #2563EB !important;
+}
 
 /* ─── Shadow overrides ─── */
 [data-theme="dark"] .shadow-sm,
 [data-theme="dark"] .shadow-md,
 [data-theme="dark"] .shadow-lg,
-[data-theme="dark"] .shadow-xl {
-  --tw-shadow-color: rgba(0, 0, 0, 0.4) !important;
+[data-theme="dark"] .shadow-xl,
+[data-theme="dark"] .shadow-2xl {
+  --tw-shadow-color: rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 4px 16px rgba(0, 0, 0, 0.4) !important;
 }
 [data-theme="dark"] .shadow-blue-200 {
   --tw-shadow-color: rgba(37, 99, 235, 0.15) !important;
 }
 [data-theme="dark"] .shadow-blue-100 {
   --tw-shadow-color: rgba(37, 99, 235, 0.1) !important;
+}
+/* Remove hover shadow on dark — replace with subtle border glow */
+[data-theme="dark"] .hover\:shadow-md:hover {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
 }
 
 /* ─── Gradient backgrounds in dark ─── */
@@ -149,6 +233,8 @@
 [data-theme="dark"] .to-\[\#DBEAFE\] { --tw-gradient-to: rgba(59, 130, 246, 0.12) !important; }
 [data-theme="dark"] .from-\[\#F0FDF4\] { --tw-gradient-from: rgba(22, 163, 74, 0.12) !important; }
 [data-theme="dark"] .to-\[\#DCFCE7\] { --tw-gradient-to: rgba(74, 222, 128, 0.12) !important; }
+[data-theme="dark"] .from-\[\#F8FAFC\] { --tw-gradient-from: #151822 !important; }
+[data-theme="dark"] .to-\[\#EFF6FF\] { --tw-gradient-to: rgba(37, 99, 235, 0.08) !important; }
 
 /* ─── Input / Textarea dark ─── */
 [data-theme="dark"] input,
@@ -196,8 +282,61 @@
 [data-theme="dark"] .hover\:text-\[\#1A1A2E\]:hover {
   color: #E8ECF4 !important;
 }
+[data-theme="dark"] .hover\:text-\[\#475569\]:hover {
+  color: #C4CAD8 !important;
+}
 [data-theme="dark"] .hover\:bg-white:hover {
   background-color: var(--color-surface) !important;
+}
+[data-theme="dark"] .hover\:bg-white\/80:hover {
+  background-color: var(--color-surface) !important;
+}
+[data-theme="dark"] .hover\:bg-red-50:hover {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+[data-theme="dark"] .hover\:bg-\[\#FEF2F2\]:hover {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+[data-theme="dark"] .hover\:bg-\[\#EFF6FF\]:hover {
+  background-color: rgba(37, 99, 235, 0.18) !important;
+}
+[data-theme="dark"] .hover\:border-\[\#2563EB\]\/30:hover {
+  border-color: rgba(37, 99, 235, 0.4) !important;
+}
+[data-theme="dark"] .hover\:border-red-300:hover {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+}
+[data-theme="dark"] .hover\:text-\[\#64748B\]:hover {
+  color: #8B92A5 !important;
+}
+
+/* ─── Active state overrides (touch press) ─── */
+[data-theme="dark"] .active\:bg-\[\#F1F5F9\]:active {
+  background-color: #1E2130 !important;
+}
+[data-theme="dark"] .active\:bg-\[\#E2E8F0\]:active {
+  background-color: #2A2D3A !important;
+}
+[data-theme="dark"] .active\:bg-white:active {
+  background-color: var(--color-surface) !important;
+}
+[data-theme="dark"] .active\:bg-red-50:active {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+[data-theme="dark"] .active\:bg-\[\#EFF6FF\]:active {
+  background-color: rgba(37, 99, 235, 0.18) !important;
+}
+[data-theme="dark"] .active\:bg-\[\#F0FDF4\]:active {
+  background-color: rgba(22, 163, 74, 0.18) !important;
+}
+[data-theme="dark"] .active\:bg-\[\#EBF4FF\]:active {
+  background-color: rgba(37, 99, 235, 0.18) !important;
+}
+[data-theme="dark"] .active\:bg-orange-50:active {
+  background-color: rgba(249, 115, 22, 0.15) !important;
+}
+[data-theme="dark"] .active\:text-\[\#64748B\]:active {
+  color: #8B92A5 !important;
 }
 
 /* ─── Hover card / dropdown panels ─── */
@@ -224,8 +363,23 @@
 }
 
 /* ─── Backdrop blur elements in dark ─── */
-[data-theme="dark"] .backdrop-blur-lg {
-  background-color: rgba(15, 17, 23, 0.92) !important;
+[data-theme="dark"] .backdrop-blur-lg,
+[data-theme="dark"] .backdrop-blur-md,
+[data-theme="dark"] .backdrop-blur-sm {
+  background-color: rgba(15, 17, 23, 0.85) !important;
+}
+
+/* ─── Sticky headers / top bars with white bg ─── */
+[data-theme="dark"] .bg-white\/80.backdrop-blur-md {
+  background-color: rgba(26, 29, 40, 0.85) !important;
+}
+[data-theme="dark"] .bg-white\/90.backdrop-blur-sm {
+  background-color: rgba(26, 29, 40, 0.92) !important;
+}
+
+/* ─── Modal overlays ─── */
+[data-theme="dark"] .bg-black\/50 {
+  background-color: rgba(0, 0, 0, 0.65) !important;
 }
 
 /* Wallet adapter dark overrides */
@@ -237,6 +391,20 @@
 /* ─── Active tab on sidebar (keep blue) ─── */
 [data-theme="dark"] .bg-\[\#2563EB\] {
   /* Keep blue — don't override */
+}
+
+/* ─── Dividers ─── */
+[data-theme="dark"] .divide-\[\#E2E8F0\] > * + * {
+  border-color: #2A2D3A !important;
+}
+[data-theme="dark"] .divide-\[\#F1F5F9\] > * + * {
+  border-color: #22252F !important;
+}
+
+/* ─── Placeholder / skeleton loaders ─── */
+[data-theme="dark"] .animate-pulse .bg-\[\#E2E8F0\],
+[data-theme="dark"] div[class*="bg-[#E2E8F0]"][class*="rounded"] {
+  background-color: #2A2D3A !important;
 }
 
 /* Theme transition on key elements */
