@@ -94,36 +94,14 @@ export default function TokenLaunch({ onClose, onSuccess, username }: TokenLaunc
       const { tokenMint, metadataUrl } = infoData.response;
       toast("success", "Token metadata created!");
 
-      // Step 2: Create fee share config
+      // Step 2: Create & sign the launch transaction (single signature!)
       setStep("launching");
 
-      const configRes = await fetch("/api/bags", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create-config",
-          payerWallet: publicKey.toBase58(),
-          tokenMint,
-          feeClaimers: [{ wallet: publicKey.toBase58(), bps: 10000 }],
-        }),
-      });
-      const configData = await configRes.json();
-      if (!configData.success) throw new Error(configData.error || "Failed to create fee config");
-
-      // Bags operates on mainnet
       const connection = new Connection(
         "https://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1",
         "confirmed"
       );
 
-      for (const txBase64 of configData.response.transactions || []) {
-        const tx = VersionedTransaction.deserialize(Buffer.from(txBase64, "base64"));
-        const signed = await signTransaction(tx);
-        const sig = await connection.sendRawTransaction(signed.serialize());
-        await connection.confirmTransaction(sig, "confirmed");
-      }
-
-      // Step 3: Create launch transaction
       const launchRes = await fetch("/api/bags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -132,7 +110,6 @@ export default function TokenLaunch({ onClose, onSuccess, username }: TokenLaunc
           metadataUrl, tokenMint,
           launchWallet: publicKey.toBase58(),
           initialBuyLamports: Math.floor(Number(initialBuy) * 1e9),
-          configKey: configData.response.configKey,
         }),
       });
       const launchData = await launchRes.json();
