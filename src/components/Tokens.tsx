@@ -31,6 +31,7 @@ interface TokenItem {
   status: string;
   twitter?: string;
   website?: string;
+  accountKeys?: string[];
 }
 
 interface ClaimablePosition {
@@ -82,42 +83,22 @@ export default function Tokens() {
     setLoadingFees(false);
   }, [publicKey]);
 
-  // Fetch user's tokens by checking claimable positions + cross-referencing feed
+  // Fetch user's tokens by matching wallet in feed accountKeys
   const fetchMyTokens = useCallback(async () => {
     if (!publicKey) return;
     setLoadingMyTokens(true);
     try {
-      // Get claimable positions to find token mints associated with this wallet
-      const feesRes = await fetch(`/api/bags?action=fees&wallet=${publicKey.toBase58()}`);
-      const feesData = await feesRes.json();
-      const myMints = new Set<string>();
-      if (feesData.success && Array.isArray(feesData.response)) {
-        feesData.response.forEach((p: any) => myMints.add(p.baseMint));
-      }
+      const walletStr = publicKey.toBase58();
 
-      // Get the full feed to match token info
+      // Get the full feed — each token has accountKeys containing the launch wallet
       const feedRes = await fetch("/api/bags?action=feed");
       const feedData = await feedRes.json();
       const feedTokens: TokenItem[] = feedData.success && Array.isArray(feedData.response) ? feedData.response : [];
 
-      // Match claimable mints against the feed for full token info
-      const matched: TokenItem[] = [];
-      for (const mint of myMints) {
-        const feedMatch = feedTokens.find((t) => t.tokenMint === mint);
-        if (feedMatch) {
-          matched.push(feedMatch);
-        } else {
-          // Token not in feed — create a minimal entry
-          matched.push({
-            name: `${mint.slice(0, 6)}...`,
-            symbol: mint.slice(0, 6),
-            description: "",
-            image: "",
-            tokenMint: mint,
-            status: "UNKNOWN",
-          });
-        }
-      }
+      // Match tokens where user's wallet is in accountKeys (= user launched it)
+      const matched = feedTokens.filter(
+        (t) => Array.isArray(t.accountKeys) && t.accountKeys.includes(walletStr)
+      );
 
       setMyTokens(matched);
     } catch (err) {
