@@ -8,6 +8,7 @@ import {
   Loader2,
   ExternalLink,
   Image as ImageIcon,
+  Upload,
   DollarSign,
   Info,
   CheckCircle2,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { useWallet } from "@/hooks/usePrivyWallet";
 import { toast } from "@/components/Toast";
+import { uploadImage } from "@/components/RichContent";
 import { Connection, VersionedTransaction } from "@solana/web3.js";
 import { BAGS_PARTNER_CONFIG_KEY, BAGS_REF_CODE } from "@/lib/bags";
 
@@ -34,8 +36,32 @@ export default function TokenLaunch({ onClose, onSuccess, username }: TokenLaunc
   const [twitter, setTwitter] = useState("");
   const [website, setWebsite] = useState("");
   const [initialBuy, setInitialBuy] = useState("0");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [result, setResult] = useState<{ tokenMint: string; metadataUrl: string } | null>(null);
   const [error, setError] = useState("");
+
+  const handleImageSelect = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image must be under 5MB");
+      return;
+    }
+    setImageFile(file);
+    setUploadingImage(true);
+    setError("");
+    try {
+      const url = await uploadImage(file);
+      setImageUrl(url);
+    } catch (err: any) {
+      setError("Failed to upload image. Try again.");
+      setImageFile(null);
+    }
+    setUploadingImage(false);
+  };
 
   const handleLaunch = async () => {
     if (!publicKey || !signTransaction) {
@@ -269,25 +295,52 @@ export default function TokenLaunch({ onClose, onSuccess, username }: TokenLaunc
               />
             </div>
 
-            {/* Image URL */}
+            {/* Token Image */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Token Image URL *
+                Token Image *
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-                {imageUrl && (
-                  <div className="w-10 h-10 rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden shrink-0">
-                    <img src={imageUrl} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              {imageUrl ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-16 h-16 rounded-xl border-2 border-purple-300 dark:border-purple-600 overflow-hidden shrink-0">
+                    <img src={imageUrl} alt="Token" className="w-full h-full object-cover" />
                   </div>
-                )}
-              </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-700 dark:text-gray-300 truncate">{imageFile?.name || "Image uploaded"}</p>
+                    <button
+                      type="button"
+                      onClick={() => { setImageUrl(""); setImageFile(null); }}
+                      className="text-xs text-red-500 hover:text-red-600 mt-1"
+                    >
+                      Remove & choose another
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl cursor-pointer hover:border-purple-400 dark:hover:border-purple-500 hover:bg-purple-50/50 dark:hover:bg-purple-900/10 transition">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleImageSelect(file);
+                    }}
+                  />
+                  {uploadingImage ? (
+                    <>
+                      <Loader2 className="w-6 h-6 text-purple-500 animate-spin mb-1" />
+                      <span className="text-xs text-gray-500">Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                      <span className="text-sm text-gray-500">Click to upload image</span>
+                      <span className="text-xs text-gray-400 mt-0.5">PNG, JPG, GIF — max 5MB</span>
+                    </>
+                  )}
+                </label>
+              )}
             </div>
 
             {/* Social Links */}
