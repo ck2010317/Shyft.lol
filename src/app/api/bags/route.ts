@@ -11,7 +11,7 @@ import { BagsSDK } from "@bagsfm/bags-sdk";
 
 const BAGS_API_KEY = (process.env.BAGS_API_KEY || "").trim();
 // Bags operates on Solana mainnet — use Helius mainnet RPC
-const BAGS_RPC_URL = process.env.BAGS_MAINNET_RPC_URL || "https://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1";
+const BAGS_RPC_URL = process.env.BAGS_MAINNET_RPC_URL || process.env.HELIUS_MAINNET_RPC || `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
 // Bags config key (Meteora config key from Bags partner dashboard — NOT a wallet)
 const BAGS_CONFIG_KEY = "B94bGwVuX7tWX8VkkyBZLmQESJ537URMcJcVkF8tdi5T";
 

@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
  * Returns { url: string } with the hosted image URL
  */
 
-const FREEIMAGE_API_KEY = "6d207e02198a847aa98d0a2a901485a5";
+const FREEIMAGE_API_KEY = process.env.FREEIMAGE_API_KEY || "6d207e02198a847aa98d0a2a901485a5";
 
 export async function POST(request: NextRequest) {
   try {

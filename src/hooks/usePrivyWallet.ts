@@ -12,11 +12,11 @@ import { Connection, PublicKey, Transaction, VersionedTransaction } from "@solan
 
 /** Helius devnet RPC — used for Shadowspace on-chain program (profiles, posts) */
 export const HELIUS_DEVNET_RPC =
-  "https://devnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1";
+  `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
 
 /** Helius mainnet RPC — used for Bags token operations */
 export const HELIUS_MAINNET_RPC =
-  "https://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1";
+  `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
 
 /** Shared connection (devnet — for Shadowspace program via Anchor) */
 let _sharedConnection: Connection | null = null;

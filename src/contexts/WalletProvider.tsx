@@ -9,17 +9,18 @@ const solanaConnectors = toSolanaWalletConnectors({
   shouldAutoConnect: true,
 });
 
-const HELIUS_MAINNET = "https://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1";
+const HELIUS_API_KEY = process.env.NEXT_PUBLIC_HELIUS_API_KEY;
+const HELIUS_MAINNET = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
 
 const solanaRpcs = {
   "solana:mainnet": {
     rpc: createSolanaRpc(HELIUS_MAINNET),
-    rpcSubscriptions: createSolanaRpcSubscriptions("wss://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1"),
+    rpcSubscriptions: createSolanaRpcSubscriptions(`wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`),
     blockExplorerUrl: "https://explorer.solana.com",
   },
   "solana:devnet": {
-    rpc: createSolanaRpc("https://devnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1"),
-    rpcSubscriptions: createSolanaRpcSubscriptions("wss://devnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1"),
+    rpc: createSolanaRpc(`https://devnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`),
+    rpcSubscriptions: createSolanaRpcSubscriptions(`wss://devnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`),
     blockExplorerUrl: "https://explorer.solana.com/?cluster=devnet",
   },
 } as const;

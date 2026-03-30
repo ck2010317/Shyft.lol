@@ -16,6 +16,12 @@ target/
 .env.local
 .env.production
 
+# Secret/private key files — NEVER commit
+*-SECRET.json
+*-secret.json
+*.secret
+keypair*.json
+
 # OS
 .DS_Store
 *.swp

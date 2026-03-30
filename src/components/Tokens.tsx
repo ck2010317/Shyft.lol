@@ -140,7 +140,7 @@ export default function Tokens() {
       if (!txList || txList.length === 0) throw new Error("No claim transactions returned");
 
       const connection = new Connection(
-        "https://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1",
+        `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
         "confirmed"
       );
 

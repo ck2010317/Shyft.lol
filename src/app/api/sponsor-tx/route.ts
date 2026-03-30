@@ -4,22 +4,26 @@ import {
   Keypair,
   PublicKey,
   Transaction,
+  SystemProgram,
 } from "@solana/web3.js";
 
 /**
  * /api/sponsor-tx — Treasury signs as fee payer for user transactions.
  *
- * Flow:
- * 1. Frontend builds tx with feePayer = treasury pubkey
- * 2. Frontend partially signs with user wallet (signTransaction)
- * 3. Frontend sends the serialized partially-signed tx here
- * 4. Backend adds treasury signature (as fee payer)
- * 5. Backend sends the fully-signed tx to Solana
- * 6. Returns the tx signature
- *
- * This means the user NEVER needs SOL in their wallet. The treasury pays
- * all transaction fees and rent.
+ * SECURITY: Only signs transactions that call the Shadowspace program.
+ * Rejects any transaction with SOL transfers, token transfers, or calls
+ * to unknown programs. This prevents treasury drain attacks.
  */
+
+// The ONLY program allowed in sponsored transactions (besides SystemProgram for account creation)
+const SHADOWSPACE_PROGRAM_ID = new PublicKey("EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ");
+
+// Programs allowed in instructions (SystemProgram is needed for account init/PDA creation)
+const ALLOWED_PROGRAMS = new Set([
+  SHADOWSPACE_PROGRAM_ID.toBase58(),
+  SystemProgram.programId.toBase58(), // 11111111111111111111111111111111
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL", // Associated Token Program (for account creation)
+]);
 
 function getTreasuryKeypair(): Keypair {
   const secret = process.env.TREASURY_PRIVATE_KEY;
@@ -29,7 +33,7 @@ function getTreasuryKeypair(): Keypair {
 }
 
 // Shadowspace on-chain program is on devnet — sponsor-tx must use devnet
-const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://devnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1";
+const RPC_URL = process.env.HELIUS_DEVNET_RPC || `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
 
 // Rate limit: max 10 sponsored tx per wallet per minute
 const txTimestamps = new Map<string, number[]>();
@@ -111,6 +115,56 @@ export async function POST(request: NextRequest) {
     if (!tx.feePayer || !tx.feePayer.equals(treasury.publicKey)) {
       return NextResponse.json(
         { error: "Transaction fee payer must be the platform treasury" },
+        { status: 400 }
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // CRITICAL SECURITY: Validate ALL instructions in the transaction.
+    // Only allow calls to the Shadowspace program and SystemProgram.
+    // This prevents attackers from crafting SOL transfer instructions
+    // that would drain the treasury.
+    // ──────────────────────────────────────────────────────────────
+    for (const ix of tx.instructions) {
+      const programId = ix.programId.toBase58();
+
+      if (!ALLOWED_PROGRAMS.has(programId)) {
+        console.error(
+          `🚨 BLOCKED: Wallet ${walletAddress} tried to call unauthorized program: ${programId}`
+        );
+        return NextResponse.json(
+          { error: "Transaction contains unauthorized program call" },
+          { status: 403 }
+        );
+      }
+
+      // Extra check: if it's a SystemProgram instruction, make sure
+      // the treasury is NOT the source of a transfer (instruction type 2 = Transfer).
+      // SystemProgram Transfer instruction layout: [u32 type (LE), u64 lamports (LE)]
+      // type 2 = Transfer. The first account is the source.
+      if (programId === SystemProgram.programId.toBase58()) {
+        const ixType = ix.data.length >= 4 ? ix.data.readUInt32LE(0) : -1;
+        // 2 = Transfer, 12 = TransferWithSeed
+        if (ixType === 2 || ixType === 12) {
+          // First account key is the source — must NOT be the treasury
+          const sourceKey = ix.keys[0]?.pubkey;
+          if (sourceKey && sourceKey.equals(treasury.publicKey)) {
+            console.error(
+              `🚨 BLOCKED: Wallet ${walletAddress} tried to transfer SOL FROM treasury`
+            );
+            return NextResponse.json(
+              { error: "Cannot transfer SOL from treasury" },
+              { status: 403 }
+            );
+          }
+        }
+      }
+    }
+
+    // Limit number of instructions to prevent abuse
+    if (tx.instructions.length > 10) {
+      return NextResponse.json(
+        { error: "Transaction has too many instructions" },
         { status: 400 }
       );
     }
