@@ -21,6 +21,7 @@ import { toast } from "@/components/Toast";
 import TokenLaunch from "@/components/TokenLaunch";
 import TokenTrade from "@/components/TokenTrade";
 import { formatSOL, BAGS_REF_CODE } from "@/lib/bags";
+import { Connection, VersionedTransaction, Transaction } from "@solana/web3.js";
 
 interface TokenItem {
   name: string;
@@ -42,7 +43,7 @@ interface ClaimablePosition {
 }
 
 export default function Tokens() {
-  const { publicKey } = useWallet();
+  const { publicKey, signTransaction } = useWallet();
   const { isConnected } = useAppStore();
   const [tab, setTab] = useState<"discover" | "my-tokens" | "earnings">("discover");
   const [tokens, setTokens] = useState<TokenItem[]>([]);
@@ -124,7 +125,7 @@ export default function Tokens() {
   }, 0);
 
   const handleClaim = async (tokenMint: string) => {
-    if (!publicKey) return;
+    if (!publicKey || !signTransaction) return;
     try {
       toast("info", "Creating claim transaction...");
       const res = await fetch("/api/bags", {
@@ -134,9 +135,35 @@ export default function Tokens() {
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
-      toast("success", "Fees claimed! Check your wallet.");
+
+      const txList: { unsignedTxBase64: string }[] = data.response;
+      if (!txList || txList.length === 0) throw new Error("No claim transactions returned");
+
+      const connection = new Connection(
+        "https://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1",
+        "confirmed"
+      );
+
+      toast("info", `Signing ${txList.length} claim transaction(s)...`);
+
+      for (const txData of txList) {
+        const buf = Buffer.from(txData.unsignedTxBase64, "base64");
+        // Try VersionedTransaction first, fallback to legacy Transaction
+        let tx: VersionedTransaction | Transaction;
+        try {
+          tx = VersionedTransaction.deserialize(buf);
+        } catch {
+          tx = Transaction.from(buf);
+        }
+        const signed = await signTransaction(tx);
+        const sig = await connection.sendRawTransaction(signed.serialize());
+        await connection.confirmTransaction(sig, "confirmed");
+      }
+
+      toast("success", "Fees claimed! Check your wallet. 🎉");
       fetchClaimable();
     } catch (err: any) {
+      console.error("Claim error:", err);
       toast("error", err.message || "Failed to claim fees");
     }
   };
