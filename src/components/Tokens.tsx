@@ -45,8 +45,10 @@ export default function Tokens() {
   const { isConnected } = useAppStore();
   const [tab, setTab] = useState<"discover" | "my-tokens" | "earnings">("discover");
   const [tokens, setTokens] = useState<TokenItem[]>([]);
+  const [myTokens, setMyTokens] = useState<TokenItem[]>([]);
   const [claimable, setClaimable] = useState<ClaimablePosition[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMyTokens, setLoadingMyTokens] = useState(false);
   const [loadingFees, setLoadingFees] = useState(false);
   const [showLaunchModal, setShowLaunchModal] = useState(false);
   const [selectedToken, setSelectedToken] = useState<TokenItem | null>(null);
@@ -80,11 +82,78 @@ export default function Tokens() {
     setLoadingFees(false);
   }, [publicKey]);
 
+  // Fetch user's tokens by checking claimable positions + cross-referencing feed
+  const fetchMyTokens = useCallback(async () => {
+    if (!publicKey) return;
+    setLoadingMyTokens(true);
+    try {
+      // Get claimable positions to find token mints associated with this wallet
+      const feesRes = await fetch(`/api/bags?action=fees&wallet=${publicKey.toBase58()}`);
+      const feesData = await feesRes.json();
+      const myMints = new Set<string>();
+      if (feesData.success && Array.isArray(feesData.response)) {
+        feesData.response.forEach((p: any) => myMints.add(p.baseMint));
+      }
+
+      // Get the full feed to match token info
+      const feedRes = await fetch("/api/bags?action=feed");
+      const feedData = await feedRes.json();
+      const feedTokens: TokenItem[] = feedData.success && Array.isArray(feedData.response) ? feedData.response : [];
+
+      // Find tokens created by this wallet (check creators for each of user's mints)
+      const matched: TokenItem[] = [];
+      for (const mint of myMints) {
+        const feedMatch = feedTokens.find((t) => t.tokenMint === mint);
+        if (feedMatch) {
+          matched.push(feedMatch);
+        } else {
+          // Token not in feed — create a minimal entry
+          matched.push({
+            name: `${mint.slice(0, 6)}...`,
+            symbol: mint.slice(0, 6),
+            description: "",
+            image: "",
+            tokenMint: mint,
+            status: "UNKNOWN",
+          });
+        }
+      }
+
+      // Also check feed for tokens where this wallet is the creator
+      const walletStr = publicKey.toBase58();
+      for (const token of feedTokens) {
+        if (!myMints.has(token.tokenMint)) {
+          try {
+            const creatorsRes = await fetch(`/api/bags?action=creators&mint=${token.tokenMint}`);
+            const creatorsData = await creatorsRes.json();
+            if (creatorsData.success && Array.isArray(creatorsData.response)) {
+              const isCreator = creatorsData.response.some(
+                (c: any) => c.wallet === walletStr && c.isCreator
+              );
+              if (isCreator) matched.push(token);
+            }
+          } catch {
+            // skip — rate limit or error
+          }
+        }
+      }
+
+      setMyTokens(matched);
+    } catch (err) {
+      console.error("Failed to fetch my tokens:", err);
+    }
+    setLoadingMyTokens(false);
+  }, [publicKey]);
+
   useEffect(() => { fetchTokens(); }, [fetchTokens]);
 
   useEffect(() => {
     if (tab === "earnings" && publicKey) fetchClaimable();
   }, [tab, publicKey, fetchClaimable]);
+
+  useEffect(() => {
+    if (tab === "my-tokens" && publicKey) fetchMyTokens();
+  }, [tab, publicKey, fetchMyTokens]);
 
   const totalClaimableSOL = claimable.reduce((sum, p) => {
     const amount = Number(p.totalClaimableLamportsUserShare || p.virtualPoolClaimableAmount || 0)
@@ -229,6 +298,7 @@ export default function Tokens() {
             </div>
           ) : (
             <div>
+              {/* Launch CTA */}
               <div className="bg-white rounded-2xl border border-[#E2E8F0] p-4 sm:p-5 mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-8 h-8 rounded-xl bg-[#EFF6FF] flex items-center justify-center">
@@ -237,7 +307,7 @@ export default function Tokens() {
                   <span className="text-sm font-semibold text-[#1A1A2E]">Launch Your Token</span>
                 </div>
                 <p className="text-xs text-[#64748B] mb-3">
-                  Create your own token and earn fees every time someone trades it. Your supporters can buy in and trade with each other.
+                  Create your own token and earn fees every time someone trades it.
                 </p>
                 <button
                   onClick={() => setShowLaunchModal(true)}
@@ -248,9 +318,66 @@ export default function Tokens() {
                 </button>
               </div>
 
+              {/* User's Tokens List */}
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-[#475569]">Your Tokens</h2>
+                <button onClick={fetchMyTokens} className="p-1.5 hover:bg-[#F1F5F9] rounded-lg transition">
+                  <RefreshCw className={`w-4 h-4 text-[#94A3B8] ${loadingMyTokens ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+
+              {loadingMyTokens ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-5 h-5 text-[#2563EB] animate-spin" />
+                </div>
+              ) : myTokens.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="w-12 h-12 rounded-2xl bg-[#F1F5F9] flex items-center justify-center mx-auto mb-3">
+                    <Coins className="w-6 h-6 text-[#94A3B8]" />
+                  </div>
+                  <p className="text-sm font-medium text-[#475569]">No tokens yet</p>
+                  <p className="text-xs text-[#94A3B8] mt-1">Launch a token or trade to see it here</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {myTokens.map((token) => (
+                    <button
+                      key={token.tokenMint}
+                      onClick={() => setSelectedToken(token)}
+                      className="w-full flex items-center gap-3 p-3 bg-white rounded-2xl border border-[#E2E8F0] hover:border-[#2563EB]/30 hover:shadow-sm transition text-left"
+                    >
+                      {token.image ? (
+                        <img src={token.image} alt="" className="w-9 h-9 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#2563EB] to-[#7C3AED] flex items-center justify-center">
+                          <span className="text-xs font-bold text-white">{token.symbol?.[0] || "?"}</span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-semibold text-[#1A1A2E] truncate">{token.name}</span>
+                          <span className="text-xs text-[#94A3B8]">${token.symbol}</span>
+                        </div>
+                        {token.description && (
+                          <p className="text-xs text-[#64748B] truncate">{token.description}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                          token.status === "MIGRATED" ? "bg-[#F0FDF4] text-[#16A34A]"
+                            : token.status === "PRE_GRAD" ? "bg-[#FFFBEB] text-[#D97706]"
+                            : "bg-[#F1F5F9] text-[#64748B]"
+                        }`}>
+                          {token.status === "MIGRATED" ? "Live" : token.status === "PRE_GRAD" ? "Pre-Grad" : token.status}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-[#CBD5E1]" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <p className="text-xs text-[#94A3B8] text-center py-4">
-                Tokens you&apos;ve created or hold will appear here.
-                <br />
                 <a href={`https://bags.fm/?ref=${BAGS_REF_CODE}`} target="_blank" rel="noopener noreferrer" className="text-[#2563EB] hover:underline">
                   Browse all tokens on Bags.fm →
                 </a>
