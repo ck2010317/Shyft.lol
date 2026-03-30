@@ -1,12 +1,13 @@
 "use client";
 
-import { Shield, Newspaper, MessageCircle, Wallet, User, Lock, BarChart3, Users, Sun, Moon } from "lucide-react";
+import { Shield, Newspaper, MessageCircle, Wallet, User, Lock, BarChart3, Users, Sun, Moon, Coins } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 
 const navItems = [
   { id: "feed", label: "Feed", icon: Newspaper },
   { id: "chat", label: "Chat", icon: MessageCircle },
   { id: "friends", label: "People", icon: Users },
+  { id: "tokens", label: "Tokens", icon: Coins },
   { id: "payments", label: "Payments", icon: Wallet },
   { id: "dashboard", label: "Dashboard", icon: BarChart3 },
   { id: "profile", label: "Profile", icon: User },
@@ -30,7 +31,7 @@ export default function Sidebar() {
         </div>
         <div>
           <h1 className="text-lg font-bold text-[#1A1A2E]">Shyft</h1>
-          <p className="text-xs text-[#64748B]">Private Social</p>
+          <p className="text-xs text-[#64748B]">On-Chain Social</p>
         </div>
       </div>
 

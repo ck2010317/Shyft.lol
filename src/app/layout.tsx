@@ -4,8 +4,8 @@ import WalletProvider from "@/contexts/WalletProvider";
 import ThemeProvider from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Shyft — Private Social on Solana",
-  description: "Shyft is a privacy-first social platform built on Solana with MagicBlock Private Ephemeral Rollups",
+  title: "Shyft — On-Chain Social on Solana",
+  description: "Shyft is a fully on-chain social platform built on Solana with encrypted chat and zero gas fees",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

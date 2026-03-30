@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Shield, User, AtSign, FileText, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Shield, User, AtSign, FileText, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { useProgram } from "@/hooks/useProgram";
 import { useAppStore } from "@/lib/store";
 import { toast } from "@/components/Toast";
-import { useWallet, useConnection } from "@/hooks/usePrivyWallet";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { useWallet } from "@/hooks/usePrivyWallet";
 
 interface ProfileSetupProps {
   onComplete: () => void;
@@ -15,50 +14,50 @@ interface ProfileSetupProps {
 export default function ProfileSetup({ onComplete }: ProfileSetupProps) {
   const program = useProgram();
   const { publicKey } = useWallet();
-  const { connection } = useConnection();
   const { setCurrentUser } = useAppStore();
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [loading, setLoading] = useState(false);
-  const [fundingWallet, setFundingWallet] = useState(false);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameTaken, setUsernameTaken] = useState(false);
+  const [usernameChecked, setUsernameChecked] = useState(false);
+  const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-airdrop devnet SOL to new wallets with 0 balance
+  // Debounced username availability check
   useEffect(() => {
-    if (!publicKey || !connection) return;
-    let cancelled = false;
-    (async () => {
+    if (usernameTimer.current) clearTimeout(usernameTimer.current);
+    setUsernameChecked(false);
+    setUsernameTaken(false);
+    if (!username.trim() || username.trim().length < 2 || !program) return;
+    setCheckingUsername(true);
+    usernameTimer.current = setTimeout(async () => {
       try {
-        const balance = await connection.getBalance(publicKey);
-        if (balance < 0.01 * LAMPORTS_PER_SOL && !cancelled) {
-          setFundingWallet(true);
-          console.log("💰 New wallet detected with low balance, requesting devnet airdrop...");
-          try {
-            const sig = await connection.requestAirdrop(publicKey, 1 * LAMPORTS_PER_SOL);
-            await connection.confirmTransaction(sig, "confirmed");
-            console.log("✅ Airdropped 1 SOL to", publicKey.toBase58());
-            toast("success", "Wallet funded!", "1 SOL airdropped for devnet transactions");
-          } catch (airdropErr: any) {
-            console.warn("Airdrop failed (may have been rate-limited):", airdropErr?.message);
-            toast("error", "Could not fund wallet", "Please use a Solana faucet to get devnet SOL");
-          }
-          if (!cancelled) setFundingWallet(false);
-        }
-      } catch (e) {
-        console.warn("Balance check failed:", e);
+        const taken = await program.isUsernameTaken(username.trim(), publicKey ?? undefined);
+        setUsernameTaken(taken);
+        setUsernameChecked(true);
+      } catch {
+        setUsernameChecked(false);
       }
-    })();
-    return () => { cancelled = true; };
-  }, [publicKey, connection]);
+      setCheckingUsername(false);
+    }, 500);
+    return () => { if (usernameTimer.current) clearTimeout(usernameTimer.current); };
+  }, [username, program, publicKey]);
+
+  // No wallet funding needed — treasury sponsors all transactions directly
 
   const handleCreate = async () => {
     if (!program || !publicKey || !username.trim() || !displayName.trim()) return;
+    if (usernameTaken) {
+      toast("error", "Username taken", "Try a different username");
+      return;
+    }
     setLoading(true);
     try {
       const sig = await program.createProfile(
         username.trim(),
         displayName.trim(),
-        bio.trim() || "Privacy enthusiast on Shyft"
+        bio.trim() || "Building on Shyft"
       );
       toast("success", "Profile created on Solana!", `TX: ${sig.slice(0, 8)}...`);
 
@@ -66,8 +65,8 @@ export default function ProfileSetup({ onComplete }: ProfileSetupProps) {
         publicKey: publicKey.toBase58(),
         username: username.trim(),
         displayName: displayName.trim(),
-        avatar: "🔒",
-        bio: bio.trim() || "Privacy enthusiast on Shyft",
+        avatar: "🧑‍💻",
+        bio: bio.trim() || "Building on Shyft",
         isPrivate: false,
         followerCount: 0,
         followingCount: 0,
@@ -89,8 +88,8 @@ export default function ProfileSetup({ onComplete }: ProfileSetupProps) {
       publicKey: addr,
       username: addr.slice(0, 8),
       displayName: addr.slice(0, 4) + "..." + addr.slice(-4),
-      avatar: "🔒",
-      bio: "Privacy enthusiast",
+      avatar: "🧑‍💻",
+      bio: "New to Shyft",
       isPrivate: false,
       followerCount: 0,
       followingCount: 0,
@@ -123,8 +122,31 @@ export default function ProfileSetup({ onComplete }: ProfileSetupProps) {
               onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
               placeholder="satoshi"
               maxLength={16}
-              className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+              className={`w-full bg-[#F8FAFC] border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 transition-colors ${
+                usernameChecked && !checkingUsername
+                  ? usernameTaken
+                    ? "border-red-400 focus:ring-red-200 focus:border-red-400"
+                    : "border-green-400 focus:ring-green-200 focus:border-green-400"
+                  : "border-[#E2E8F0] focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+              }`}
             />
+            {username.trim().length >= 2 && (
+              <div className="flex items-center gap-1 mt-1">
+                {checkingUsername ? (
+                  <span className="text-[11px] text-[#94A3B8]">Checking...</span>
+                ) : usernameChecked ? (
+                  usernameTaken ? (
+                    <span className="text-[11px] text-red-500 flex items-center gap-1">
+                      <XCircle className="w-3 h-3" /> Username taken
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-green-600 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Available
+                    </span>
+                  )
+                ) : null}
+              </div>
+            )}
           </div>
 
           <div>
@@ -148,7 +170,7 @@ export default function ProfileSetup({ onComplete }: ProfileSetupProps) {
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="Privacy advocate, builder, dreamer..."
+              placeholder="Builder, creator, dreamer..."
               maxLength={64}
               rows={2}
               className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] resize-none"
@@ -157,15 +179,10 @@ export default function ProfileSetup({ onComplete }: ProfileSetupProps) {
 
           <button
             onClick={handleCreate}
-            disabled={!username.trim() || !displayName.trim() || loading || fundingWallet}
+            disabled={!username.trim() || !displayName.trim() || loading || usernameTaken || checkingUsername}
             className="w-full py-3 bg-gradient-to-r from-[#2563EB] to-[#16A34A] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
           >
-            {fundingWallet ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Funding wallet...
-              </>
-            ) : loading ? (
+            {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Creating on Solana...

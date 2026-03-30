@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   ArrowLeft,
   Calendar,
@@ -28,6 +28,8 @@ import {
   QrCode,
   RefreshCw,
   Send,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { useProgram } from "@/hooks/useProgram";
@@ -38,8 +40,7 @@ import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { toast } from "@/components/Toast";
 import { RichContent } from "@/components/RichContent";
 import { uploadImage } from "@/components/RichContent";
-import { ShyftClient, clearRpcCache, SessionOpts } from "@/lib/program";
-import { useSessionKey } from "@/hooks/useSessionKey";
+import { ShyftClient, clearRpcCache } from "@/lib/program";
 
 /* ───────── Types ───────── */
 interface OnChainPost {
@@ -101,7 +102,6 @@ export default function Profile() {
   const { currentUser, setCurrentUser, isConnected, viewingProfile, setViewingProfile, setActiveTab: setAppTab } = useAppStore();
   const program = useProgram();
   const { publicKey } = useWallet();
-  const sessionState = useSessionKey();
 
   // Are we viewing someone else's profile?
   const isViewingOther = !!(viewingProfile && publicKey && viewingProfile !== publicKey.toBase58());
@@ -121,11 +121,35 @@ export default function Profile() {
   const [realFollowingCount, setRealFollowingCount] = useState(0);
 
   /* profile creation form */
-  const [showSetup, setShowSetup] = useState(false);
+  const [showSetup, setShowSetup] = useState(true);
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [creating, setCreating] = useState(false);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameTaken, setUsernameTaken] = useState(false);
+  const [usernameChecked, setUsernameChecked] = useState(false);
+  const usernameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced username availability check
+  useEffect(() => {
+    if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current);
+    setUsernameChecked(false);
+    setUsernameTaken(false);
+    if (!username.trim() || username.trim().length < 2 || !program) return;
+    setCheckingUsername(true);
+    usernameTimerRef.current = setTimeout(async () => {
+      try {
+        const taken = await program.isUsernameTaken(username.trim(), publicKey ?? undefined);
+        setUsernameTaken(taken);
+        setUsernameChecked(true);
+      } catch {
+        setUsernameChecked(false);
+      }
+      setCheckingUsername(false);
+    }, 500);
+    return () => { if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current); };
+  }, [username, program, publicKey]);
 
   /* wallet management */
   const { connection } = useConnection();
@@ -276,6 +300,10 @@ export default function Profile() {
   /* ── create profile ── */
   async function handleCreate() {
     if (!program || !username.trim() || !displayName.trim()) return;
+    if (usernameTaken) {
+      toast("error", "Username taken", "Try a different username");
+      return;
+    }
     setCreating(true);
     try {
       await program.createProfile(username.trim(), displayName.trim(), bio.trim());
@@ -519,9 +547,32 @@ export default function Profile() {
                     onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
                     placeholder="username"
                     maxLength={16}
-                    className="w-full pl-8 pr-3 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-sm text-[#1A1A2E] placeholder:text-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 transition-all"
+                    className={`w-full pl-8 pr-3 py-2.5 bg-[#F8FAFC] border rounded-xl text-sm text-[#1A1A2E] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 transition-all ${
+                      usernameChecked && !checkingUsername
+                        ? usernameTaken
+                          ? "border-red-400 focus:ring-red-200 focus:border-red-400"
+                          : "border-green-400 focus:ring-green-200 focus:border-green-400"
+                        : "border-[#E2E8F0] focus:border-[#2563EB] focus:ring-[#2563EB]/10"
+                    }`}
                   />
                 </div>
+                {username.trim().length >= 2 && (
+                  <div className="flex items-center gap-1 mt-1">
+                    {checkingUsername ? (
+                      <span className="text-[11px] text-[#94A3B8]">Checking...</span>
+                    ) : usernameChecked ? (
+                      usernameTaken ? (
+                        <span className="text-[11px] text-red-500 flex items-center gap-1">
+                          <XCircle className="w-3 h-3" /> Username taken
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-green-600 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Available
+                        </span>
+                      )
+                    ) : null}
+                  </div>
+                )}
               </div>
 
               {/* Display Name */}
@@ -559,7 +610,7 @@ export default function Profile() {
                 </button>
                 <button
                   onClick={handleCreate}
-                  disabled={!username.trim() || !displayName.trim() || creating}
+                  disabled={!username.trim() || !displayName.trim() || creating || usernameTaken || checkingUsername}
                   className="px-5 py-2.5 bg-[#1A1A2E] text-white font-bold text-sm rounded-full hover:bg-[#2A2A3E] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {creating ? "Creating..." : "Save"}
@@ -894,7 +945,6 @@ export default function Profile() {
                   comments={allComments.filter((c) => c.post === post.publicKey)}
                   reactions={allReactions.filter((r) => r.post === post.publicKey)}
                   program={program}
-                  sessionState={sessionState}
                   profileMap={profileMap}
                   publicKey={publicKey}
                   onInteraction={() => fetchProfile()}
@@ -1039,7 +1089,6 @@ function ProfilePostCard({
   comments,
   reactions,
   program,
-  sessionState,
   profileMap,
   publicKey,
   onInteraction,
@@ -1051,7 +1100,6 @@ function ProfilePostCard({
   comments: any[];
   reactions: any[];
   program: ShyftClient | null;
-  sessionState: any;
   profileMap: Record<string, any>;
   publicKey: PublicKey | null;
   onInteraction: () => void;
@@ -1075,31 +1123,13 @@ function ProfilePostCard({
   }
   const totalReactions = reactions.length;
 
-  const getSessionOpts = async (): Promise<SessionOpts | undefined> => {
-    if (!publicKey) return undefined;
-    if (sessionState.isActive && sessionState.sessionKeypair && sessionState.sessionTokenPda) {
-      return { sessionKeypair: sessionState.sessionKeypair, sessionTokenPda: sessionState.sessionTokenPda, authority: publicKey };
-    }
-    const result = await sessionState.createSession();
-    if (result) return { sessionKeypair: result.keypair, sessionTokenPda: result.tokenPda, authority: publicKey };
-    return undefined;
-  };
-
   const handleLike = async () => {
     if (!program || !isConnected || hasLiked || liking) return;
     setLiking(true);
     try {
       const authorPubkey = new PublicKey(post.author);
       const postId = Number(post.postId);
-      const session = await getSessionOpts();
-      try {
-        await program.likePost(authorPubkey, postId, session);
-      } catch (firstErr: any) {
-        const msg = firstErr?.message || "";
-        if (session && (msg.includes("insufficient") || msg.includes("0x1") || msg.includes("custom program error"))) {
-          await program.likePost(authorPubkey, postId, undefined);
-        } else throw firstErr;
-      }
+      await program.likePost(authorPubkey, postId);
       addLikedPost(post.publicKey);
       setLocalLikeBoost((prev) => prev + 1);
       toast("success", "Liked! ❤️", "Recorded on-chain");
@@ -1117,15 +1147,7 @@ function ProfilePostCard({
       const authorPubkey = new PublicKey(post.author);
       const postId = Number(post.postId);
       const commentIndex = Date.now();
-      const session = await getSessionOpts();
-      try {
-        await program.createComment(authorPubkey, postId, commentIndex, commentText.trim(), session);
-      } catch (firstErr: any) {
-        const msg = firstErr?.message || "";
-        if (session && (msg.includes("insufficient") || msg.includes("0x1") || msg.includes("custom program error"))) {
-          await program.createComment(authorPubkey, postId, commentIndex, commentText.trim(), undefined);
-        } else throw firstErr;
-      }
+      await program.createComment(authorPubkey, postId, commentIndex, commentText.trim());
       setCommentText("");
       toast("success", "Comment posted! 💬", "On-chain");
       onInteraction();
@@ -1159,15 +1181,7 @@ function ProfilePostCard({
       const preview = post.content.length > 120 ? post.content.slice(0, 120) + "..." : post.content;
       const repostContent = `RT|${authorName}|${preview}`;
       const postId = Date.now();
-      const session = await getSessionOpts();
-      try {
-        await program.createPost(postId, repostContent, false, session);
-      } catch (firstErr: any) {
-        const msg = firstErr?.message || "";
-        if (session && (msg.includes("insufficient") || msg.includes("0x1") || msg.includes("custom program error"))) {
-          await program.createPost(postId, repostContent, false, undefined);
-        } else throw firstErr;
-      }
+      await program.createPost(postId, repostContent, false);
       toast("success", "Reposted! 🔁", "Published on-chain");
       onInteraction();
     } catch (err: any) {

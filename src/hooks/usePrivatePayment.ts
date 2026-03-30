@@ -9,7 +9,6 @@ import {
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import { useAppStore } from "@/lib/store";
-import { ShyftClient, deriveChatId, getChatPda } from "@/lib/program";
 
 export type PaymentStep = "idle" | "sending" | "confirming" | "recording" | "delegating" | "done" | "error";
 
@@ -22,7 +21,7 @@ export function usePrivatePayment() {
   const [txSignature, setTxSignature] = useState<string | null>(null);
 
   const sendPayment = useCallback(
-    async (recipientAddress: string, amount: number, program?: ShyftClient | null) => {
+    async (recipientAddress: string, amount: number) => {
       if (!publicKey || !signTransaction) {
         setError("Wallet not connected");
         return null;
@@ -49,7 +48,7 @@ export function usePrivatePayment() {
           throw new Error(`Insufficient balance. You have ${(balance / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
         }
 
-        // Step 1: Direct SOL transfer on Solana
+        // Direct SOL transfer on Solana
         setStep("sending");
         console.log(`💸 Sending ${amount} SOL to ${recipientAddress.slice(0, 8)}...`);
 
@@ -80,69 +79,6 @@ export function usePrivatePayment() {
 
         console.log("✅ Payment confirmed:", sig);
         setTxSignature(sig);
-
-        // Step 2: Record payment on-chain with MagicBlock TEE delegation
-        if (program) {
-          setStep("recording");
-          console.log("📝 Recording payment on-chain with MagicBlock...");
-
-          try {
-            // Derive chat ID between sender and recipient
-            const chatId = deriveChatId(publicKey, recipientPubkey);
-            const [chatPda] = getChatPda(chatId);
-
-            // Check if chat exists, if not create it with MagicBlock permission
-            let chatExists = false;
-            try {
-              const chatAccInfo = await connection.getAccountInfo(chatPda);
-              chatExists = chatAccInfo !== null;
-            } catch {
-              chatExists = false;
-            }
-
-            if (!chatExists) {
-              console.log("💬 Creating chat for payment record...");
-              try {
-                await program.createPrivateChatFull(chatId, recipientPubkey);
-                console.log("✅ Chat created with MagicBlock permission");
-                chatExists = true;
-              } catch (chatErr: any) {
-                console.warn("⚠️ Chat creation failed:", chatErr?.message?.slice(0, 100));
-              }
-            }
-
-            if (chatExists) {
-              // Get current message count to determine index
-              let msgIndex = 0;
-              try {
-                const chatData = await program.getChat(chatId);
-                if (chatData) {
-                  msgIndex = Number(chatData.messageCount || 0);
-                }
-              } catch {
-                msgIndex = 0;
-              }
-
-              setStep("delegating");
-              console.log("🔐 Delegating payment record to MagicBlock TEE...");
-
-              // sendMessage creates the on-chain record + MagicBlock permission + TEE delegation
-              const paymentLamports = Math.round(amount * 1_000_000); // micro-SOL for display
-              const msgSig = await program.sendMessage(
-                chatId,
-                msgIndex,
-                `💸 Payment: ${amount} SOL (TX: ${sig.slice(0, 8)}...)`,
-                true,
-                paymentLamports
-              );
-              console.log("✅ Payment recorded on-chain + delegated to MagicBlock TEE:", msgSig);
-            }
-          } catch (recordErr: any) {
-            // Payment already sent — on-chain record is best-effort
-            console.warn("⚠️ MagicBlock record failed (SOL already sent):", recordErr?.message?.slice(0, 100));
-          }
-        }
-
         setStep("done");
 
         addPayment({
@@ -152,7 +88,7 @@ export function usePrivatePayment() {
           amount,
           token: "SOL",
           status: "completed",
-          isPrivate: true,
+          isPrivate: false,
           timestamp: Date.now(),
           txSignature: sig,
         });
@@ -170,7 +106,7 @@ export function usePrivatePayment() {
           amount,
           token: "SOL",
           status: "failed",
-          isPrivate: true,
+          isPrivate: false,
           timestamp: Date.now(),
         });
 

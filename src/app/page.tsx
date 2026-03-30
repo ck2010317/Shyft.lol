@@ -11,17 +11,23 @@ import Payments from "@/components/Payments";
 import Profile from "@/components/Profile";
 import CreatorDashboard from "@/components/CreatorDashboard";
 import Friends from "@/components/Friends";
+import Tokens from "@/components/Tokens";
 import ToastContainer from "@/components/Toast";
 import Landing from "@/components/Landing";
 import OnboardingDemo from "@/components/OnboardingDemo";
+import ProfileSetup from "@/components/ProfileSetup";
 import { useAppStore } from "@/lib/store";
+import { useProgram } from "@/hooks/useProgram";
 
 export default function Home() {
-  const { activeTab } = useAppStore();
-  const { connected } = useWallet();
+  const { activeTab, currentUser } = useAppStore();
+  const { connected, publicKey } = useWallet();
+  const program = useProgram();
   const [mounted, setMounted] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasSeenDemo, setHasSeenDemo] = useState(false);
+  const [needsProfile, setNeedsProfile] = useState(false);
+  const [checkingProfile, setCheckingProfile] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -31,6 +37,31 @@ export default function Home() {
       setShowOnboarding(true);
     }
   }, [connected]);
+
+  // Check if user has an on-chain profile after connecting
+  useEffect(() => {
+    if (!connected || !program || !publicKey || showOnboarding) return;
+    // If we already have a currentUser in store, no need to check
+    if (currentUser) {
+      setNeedsProfile(false);
+      return;
+    }
+    let cancelled = false;
+    const checkProfile = async () => {
+      setCheckingProfile(true);
+      try {
+        const profile = await program.getProfile(publicKey);
+        if (!cancelled) {
+          setNeedsProfile(!profile);
+        }
+      } catch {
+        if (!cancelled) setNeedsProfile(true);
+      }
+      if (!cancelled) setCheckingProfile(false);
+    };
+    checkProfile();
+    return () => { cancelled = true; };
+  }, [connected, program, publicKey, showOnboarding, currentUser]);
 
   if (!mounted) {
     return (
@@ -65,6 +96,9 @@ export default function Home() {
     <>
       <ToastContainer />
       {showOnboarding && <OnboardingDemo onComplete={handleOnboardingComplete} />}
+      {needsProfile && !showOnboarding && (
+        <ProfileSetup onComplete={() => setNeedsProfile(false)} />
+      )}
       <Sidebar />
       <div className="md:ml-64 h-screen flex flex-col bg-[#FAFBFC] overflow-hidden">
         <Header />
@@ -72,6 +106,7 @@ export default function Home() {
           {activeTab === "feed" && <Feed />}
           {activeTab === "chat" && <Chat />}
           {activeTab === "friends" && <Friends />}
+          {activeTab === "tokens" && <Tokens />}
           {activeTab === "payments" && <Payments />}
           {activeTab === "dashboard" && <CreatorDashboard />}
           {activeTab === "profile" && <Profile />}

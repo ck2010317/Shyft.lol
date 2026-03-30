@@ -94,6 +94,8 @@ export default function Chat() {
   const [creatingChat, setCreatingChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const publishingKeyRef = useRef(false);
+  const keyPublishedChats = useRef(new Set<number>());
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -221,17 +223,24 @@ export default function Chat() {
       const myAddr = publicKey.toBase58();
 
       // First: ensure WE have published our key (critical for second user)
-      if (chatInfo.exists) {
+      // Use a ref lock to prevent concurrent calls from publishing multiple times
+      if (chatInfo.exists && !publishingKeyRef.current && !keyPublishedChats.current.has(chatInfo.chatId)) {
         try {
           const hasMyKey = await program.findMyEncryptionKey(chatInfo.chatId, myAddr);
           if (!hasMyKey) {
+            publishingKeyRef.current = true;
             console.log("🔑 Publishing our encryption key for this chat...");
-            const chatData = await program.getChat(chatInfo.chatId);
-            const msgIndex = chatData ? Number(chatData.messageCount || 0) : 0;
+            const msgIndex = await program.getNextMessageIndex(chatInfo.chatId);
             await program.publishEncryptionKey(chatInfo.chatId, msgIndex, encryptionKeys.publicKey);
             console.log("✅ Encryption key published on-chain!");
+            keyPublishedChats.current.add(chatInfo.chatId);
+            publishingKeyRef.current = false;
+          } else {
+            // Already on-chain, mark so we don't check again
+            keyPublishedChats.current.add(chatInfo.chatId);
           }
         } catch (keyErr) {
+          publishingKeyRef.current = false;
           console.warn("Key publish check failed:", keyErr);
         }
       }
@@ -255,12 +264,12 @@ export default function Chat() {
           messageIndex: m.messageIndex,
           sender: m.sender,
           content: m.content,
-          decrypted: null,
+          decrypted: m.content.startsWith("PLAIN:") ? m.content.slice(6) : null,
           isPayment: m.isPayment,
           paymentAmount: m.paymentAmount,
           timestamp: m.timestamp,
           isKeyExchange: m.content.startsWith("PUBKEY:"),
-          isEncrypted: m.content.startsWith("ENC:"),
+          isEncrypted: m.content.startsWith("ENC:") || m.content.startsWith("PLAIN:"),
           isMe: m.sender === myAddr,
         })));
       }
@@ -273,12 +282,20 @@ export default function Chat() {
 
   // Poll for new messages
   useEffect(() => {
-    if (!activeChat || !activeChat.exists) return;
+    if (!activeChat) return;
+    // For non-existent chats, nothing to poll
+    if (!activeChat.exists) return;
 
+    // Load immediately
     loadMessages(activeChat);
 
-    pollRef.current = setInterval(() => {
-      loadMessages(activeChat);
+    // Poll, but skip if previous call is still running
+    const loadingRef = { current: false };
+    pollRef.current = setInterval(async () => {
+      if (loadingRef.current) return;
+      loadingRef.current = true;
+      await loadMessages(activeChat);
+      loadingRef.current = false;
     }, 5000);
 
     return () => {
@@ -293,9 +310,7 @@ export default function Chat() {
     setActiveChat(chat);
     setMessages([]);
     setPeerPubKey(null);
-    if (chat.exists) {
-      loadMessages(chat);
-    }
+    // Don't call loadMessages here — the useEffect watches activeChat and will call it
   };
 
   const handleSend = async () => {
@@ -329,12 +344,6 @@ export default function Chat() {
         const peerKey = await program.findPeerEncryptionKey(chatInfo.chatId, myAddr);
         setPeerPubKey(peerKey);
 
-        if (!peerKey) {
-          toast("privacy", "Waiting for peer", "They need to open this chat to complete key exchange.");
-          setSending(false);
-          setMessageText(content);
-          return;
-        }
       }
 
       let peerKey = peerPubKey;
@@ -344,21 +353,13 @@ export default function Chat() {
         setPeerPubKey(peerKey);
       }
 
-      if (!peerKey) {
-        toast("error", "Key exchange incomplete", "The other person needs to open this chat first.");
-        setSending(false);
-        setMessageText(content);
-        return;
-      }
-
-      const chatData = await program.getChat(chatInfo.chatId);
-      const msgIndex = chatData ? Number(chatData.messageCount || 0) : 0;
+      const msgIndex = await program.getNextMessageIndex(chatInfo.chatId);
 
       const localMsg: DecryptedMsg = {
         publicKey: "pending",
         messageIndex: msgIndex,
         sender: publicKey.toBase58(),
-        content: "ENC:...",
+        content: peerKey ? "ENC:..." : "PLAIN:" + content,
         decrypted: content,
         isPayment: false,
         paymentAmount: 0,
@@ -369,13 +370,25 @@ export default function Chat() {
       };
       setMessages(prev => [...prev, localMsg]);
 
-      await program.sendE2EMessage(
-        chatInfo.chatId,
-        msgIndex,
-        content,
-        encryptionKeys.secretKey,
-        peerKey
-      );
+      if (peerKey) {
+        // E2E encrypted send
+        await program.sendE2EMessage(
+          chatInfo.chatId,
+          msgIndex,
+          content,
+          encryptionKeys.secretKey,
+          peerKey
+        );
+      } else {
+        // No peer key yet — send as plaintext (on-chain but readable)
+        // This ensures the message lands immediately without waiting for key exchange
+        await program.sendMessageSimple(
+          chatInfo.chatId,
+          msgIndex,
+          "PLAIN:" + content
+        );
+        toast("privacy", "Sent (pre-encryption)", "Future messages will be E2E encrypted after key exchange.");
+      }
 
       setChats(prev => prev.map(c =>
         c.friendAddress === chatInfo!.friendAddress

@@ -4,7 +4,7 @@
 > **Program ID:** `EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ`  
 > **Network:** Solana Devnet
 
-Shyft is the first fully on-chain social platform built on Solana. Every post, comment, like, reaction, follow, repost, and chat message is a Solana transaction — stored permanently on-chain. Users sign in with Privy embedded wallets (email/social login), interact gaslessly via session keys, and receive real-time notifications for all social activity.
+Shyft is the first fully on-chain social platform built on Solana. Every post, comment, like, reaction, follow, repost, and chat message is a Solana transaction — stored permanently on-chain. Users sign in with Privy embedded wallets (email/social login), interact gaslessly via treasury sponsorship, and never need to own or pay any SOL. The platform founder sponsors all gas and rent costs.
 
 ---
 
@@ -12,13 +12,14 @@ Shyft is the first fully on-chain social platform built on Solana. Every post, c
 
 - [Features](#features)
 - [Architecture](#architecture)
+- [Zero-Cost Onboarding (Treasury Sponsorship)](#zero-cost-onboarding-treasury-sponsorship)
 - [On-Chain Data](#on-chain-data)
-- [Session Keys (Gasless UX)](#session-keys-gasless-ux)
+- [E2E Encrypted Chat](#e2e-encrypted-chat)
 - [Real-Time Notifications](#real-time-notifications)
 - [Clickable Profiles & Hover Cards](#clickable-profiles--hover-cards)
 - [Dark / Light Theme](#dark--light-theme)
-- [MagicBlock Integration — TEE Privacy](#magicblock-integration--tee-privacy)
 - [On-Chain Program (Rust/Anchor)](#on-chain-program-rustanchor)
+- [Backend API Routes](#backend-api-routes)
 - [Frontend (Next.js)](#frontend-nextjs)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
@@ -38,9 +39,10 @@ Shyft is the first fully on-chain social platform built on Solana. Every post, c
 | **Reactions** | React with ❤️ 🔥 🚀 😂 👏 💡 — each reaction is a PDA | ✅ |
 | **Reposts** | Repost anyone's content — creates a new on-chain post with `RT\|@author\|content` | ✅ |
 | **Follows** | Follow/unfollow users — on-chain follow accounts with follower/following counters | ✅ |
-| **Chat** | 1:1 encrypted messaging between users | ✅ |
+| **E2E Encrypted Chat** | 1:1 P2P messaging with NaCl Box (X25519-XSalsa20-Poly1305) — ciphertext stored on-chain, only sender/receiver can decrypt | ✅ |
 | **In-Chat Payments** | Send SOL to friends directly from chat | ✅ |
-| **Session Keys** | Gasless interactions — no wallet popup after initial session creation | ✅ |
+| **Treasury Sponsorship** | Platform treasury pays ALL gas fees and rent — users never need SOL | ✅ |
+| **Zero-Cost Onboarding** | New users sign in → create profile → start posting. Zero SOL required. Treasury sponsors everything via `/api/sponsor-tx` | ✅ |
 | **Real-Time Notifications** | Bell icon with live alerts for likes, comments, reactions, reposts, follows (5s polling) | Polling |
 | **Clickable Profiles** | Click any username or avatar to view that user's profile (like X/Twitter) | — |
 | **Profile Hover Cards** | Hover over any username to see a popup card with avatar, bio, follower/following count | — |
@@ -72,15 +74,15 @@ Shyft is the first fully on-chain social platform built on Solana. Every post, c
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬────┘ └───┬────┘  │
 │       │            │            │             │          │       │
 │       ▼            ▼            ▼             ▼          ▼       │
-│  ┌──────────────────────────────────────────────────────────┐    │
+│  ┌────────────────────────────────────────────────────────┐    │
 │  │           ShyftClient (src/lib/program.ts)               │    │
-│  │    Anchor RPC · Session Keys · MagicBlock TEE · Cache    │    │
-│  └────────────────────────┬─────────────────────────────────┘    │
+│  │    Anchor RPC · Treasury Sponsorship · E2E Encryption    │    │
+│  └────────────────────────┬───────────────────────────────┘    │
 │                           │                                      │
-│  ┌────────────────────────┼─────────────────────────────────┐    │
-│  │         Session Key Manager (useSessionKey.ts)           │    │
-│  │  Auto-create · 0.05 SOL deposit · 7-day validity         │    │
-│  │  Auto-revoke at 2M lamports · Retry-without-session      │    │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │        Treasury Sponsorship API (Next.js API Route)      │    │
+│  │  /api/sponsor-tx — Treasury co-signs as fee payer        │    │
+│  │  Treasury pays ALL gas fees + rent — user never pays     │    │
 │  └──────────────────────────────────────────────────────────┘    │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐    │
@@ -109,26 +111,9 @@ Shyft is the first fully on-chain social platform built on Solana. Every post, c
 │  │  • create_comment    • react_to_post                     │    │
 │  │  • create_chat       • send_message                      │    │
 │  │  • create_conversation • send_conversation_message       │    │
-│  │  • delegate_pda      • create_permission • undelegate    │    │
 │  └──────────────────────────────────────────────────────────┘    │
 │                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │          Session Token Program (gari-network)            │    │
-│  │  Ephemeral keypairs sign TXs without wallet popups       │    │
-│  │  #[session_auth_or] macro on all interaction instructions │    │
-│  └──────────────────────────────────────────────────────────┘    │
-│                                                                  │
-│  ┌─────────────────────┐  ┌──────────────────────────────────┐   │
-│  │  Permission Program │  │     Delegation Program           │   │
-│  │  ACLseoPoyC3cBqoUtk │  │     DELeGGvXpWV2fqJUhqcF5ZS     │   │
-│  │  (Access Control)   │  │     (TEE Delegation)             │   │
-│  └─────────────────────┘  └──────────────────────────────────┘   │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │              MagicBlock TEE Validator                     │    │
-│  │  FnE6VJT5QNZdedZPnCoLsARgBwoE6DeJNjBs2H1gySXA          │    │
-│  │  Intel TDX hardware-level privacy for delegated accounts  │    │
-│  └──────────────────────────────────────────────────────────┘    │
+
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -136,44 +121,98 @@ Shyft is the first fully on-chain social platform built on Solana. Every post, c
 
 ## On-Chain Data
 
-Everything on Shyft is stored as Solana program accounts. Here's what's currently live on devnet:
+Everything on Shyft is stored as Solana program accounts (PDAs). Nothing is stored in a database.
 
-| Account Type | Count | Rent Each | Description |
-|-------------|------:|-----------|-------------|
-| **Posts** | 8+ | 0.002763 SOL | Text content, like counter, author, timestamp |
-| **Comments** | 23+ | 0.002227 SOL | Comment text, author, linked post, timestamp |
-| **Reactions** | 12+ | 0.001399 SOL | Emoji reaction type, user, linked post |
-| **Profiles** | 2+ | 0.003083 SOL | Username, display name, bio, avatar URL, banner URL, follower/following/post counts |
-| **Follows** | 2+ | 0.001392 SOL | Follower → following relationship |
-| **Conversations** | 1+ | 0.052256 SOL | Chat messages between two participants |
-| **Total** | **48+** | | **~0.151 SOL total rent** |
+| Account Type | Rent Each | Description |
+|-------------|-----------|-------------|
+| **Profile** | ~0.003 SOL | Username, display name, bio, avatar URL, banner URL, follower/following/post counts, created_at |
+| **Post** | ~0.0027 SOL | Text content, like counter, comment count, author, timestamp |
+| **Comment** | ~0.0022 SOL | Comment text, author, linked post, timestamp |
+| **Reaction** | ~0.0014 SOL | Emoji reaction type (❤️🔥🚀😂👏💡), user, linked post |
+| **Follow** | ~0.0014 SOL | Follower → following relationship |
+| **Chat** | ~0.0013 SOL | Chat metadata between two participants (message counter) |
+| **Message** | ~0.005 SOL | E2E encrypted message content (ciphertext), sender, chat reference |
 
-Every interaction is a signed Solana transaction. Nothing is stored in a database.
+Every interaction is a signed Solana transaction. All rent costs are paid by the platform treasury — **users pay nothing**.
 
 ---
 
-## Session Keys (Gasless UX)
+## Zero-Cost Onboarding (Treasury Sponsorship)
 
-Shyft uses the **gari-network session-keys program** to eliminate wallet popups after initial setup:
+Shyft is **completely free to use**. The platform treasury pays all Solana transaction fees and account rent. Users never need to own, buy, or transfer any SOL.
 
-1. **User connects** via Privy (email, Google, etc.) → embedded Solana wallet created
-2. **First interaction** auto-creates a session: user signs once, deposits 0.05 SOL
-3. **All subsequent interactions** (posts, comments, likes, reactions) are signed by an ephemeral keypair — **no wallet popup**
-4. **Session expires** after 7 days or when balance drops below 2M lamports
-5. **Automatic fallback**: if session key runs out of SOL, the app retries with a direct wallet signature
+### How It Works
 
-The `#[session_auth_or]` macro is applied to every interaction instruction in the Anchor program:
+| Step | What Happens | Who Pays |
+|------|-------------|----------|
+| 1. **Sign in** | Privy creates an embedded Solana wallet (0 SOL) | Free |
+| 2. **Create profile** | User signs to prove identity → `/api/sponsor-tx` adds treasury as fee payer + rent payer | **Treasury** |
+| 3. **All actions** | User's Privy wallet signs silently → treasury co-signs as fee payer via `/api/sponsor-tx` | **Treasury** |
 
-```rust
-#[session_auth_or(
-    ctx.accounts.author.key() == ctx.accounts.author.key(),
-    ShadowError::Unauthorized
-)]
-pub fn create_post(...) -> Result<()> { ... }
-pub fn create_comment(...) -> Result<()> { ... }
-pub fn like_post(...) -> Result<()> { ... }
-pub fn react_to_post(...) -> Result<()> { ... }
-```
+**The user's Privy wallet never needs any SOL.** The on-chain program has a separate `payer` signer on every instruction, so the treasury can pay rent while the user only signs to prove identity. Privy embedded wallets sign silently — no wallet popups.
+
+### Backend API Routes for Sponsorship
+
+| Endpoint | Method | Purpose |
+|----------|--------|--------|
+| `/api/sponsor-tx` | `GET` | Returns the treasury public key |
+| `/api/sponsor-tx` | `POST` | Accepts a partially-signed tx, adds treasury signature as fee payer, submits to Solana |
+
+### Cost Per User
+
+| Action | Cost (SOL) | Frequency |
+|--------|-----------|----------|
+| Profile creation (rent) | ~0.003 | Once |
+| Post (rent) | ~0.0027 | Per post |
+| Comment (rent) | ~0.0022 | Per comment |
+| Reaction (rent) | ~0.0014 | Per reaction |
+| **Total per new user (first post)** | **~0.006** | — |
+
+At current SOL prices (~$180), that's about **$0.001 per user**.
+
+---
+
+## Real-Time Notifications
+
+---
+
+## E2E Encrypted Chat
+
+Shyft has **fully on-chain, end-to-end encrypted P2P messaging**. Messages are stored as ciphertext on Solana — only the sender and receiver can decrypt them.
+
+### Encryption Protocol
+
+| Layer | Technology |
+|-------|-----------|
+| **Key Exchange** | X25519 (Curve25519 Diffie-Hellman) |
+| **Encryption** | XSalsa20-Poly1305 (NaCl Box) |
+| **Key Derivation** | Wallet signs `"shyft-encryption-key-v1:{address}"` → SHA-256 → X25519 keypair |
+| **Library** | `tweetnacl` (browser-compatible) |
+
+### Message Format
+
+Messages stored on-chain use prefixes to indicate their type:
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `PUBKEY:{base64}` | Key exchange — publishes encryption public key | Sent automatically when opening a chat |
+| `PLAIN:{text}` | Unencrypted message (before both parties have exchanged keys) | First message in a new chat |
+| `ENC:{nonce}:{ciphertext}` | Encrypted message (after key exchange) | All messages after both keys are shared |
+
+### Chat Flow
+
+1. **User A opens chat with User B** → auto-publishes `PUBKEY:` message with their X25519 public key
+2. **User A sends first message** → sent as `PLAIN:` (because User B hasn't shared their key yet)
+3. **User B opens the chat** → auto-publishes their `PUBKEY:` message
+4. **Both keys now on-chain** → all subsequent messages encrypted as `ENC:` using NaCl Box shared secret
+5. **Decryption** — each client scans message PDAs, finds peer's public key, computes shared secret, decrypts locally
+
+### Security Properties
+
+- **Forward secrecy per-chat**: Each chat derives a unique shared secret from both parties' X25519 keys
+- **On-chain ciphertext**: Only encrypted bytes are stored on Solana — validators, explorers, and third parties see only gibberish
+- **No server-side keys**: The server never sees plaintext or private encryption keys
+- **Key derivation from wallet**: Encryption keys are deterministically derived from the user's wallet signature — no extra key management
 
 ---
 
@@ -261,7 +300,7 @@ Shyft supports a full **Night Mode** (dark) and **Day Mode** (light) theme with 
 - All backgrounds (page `#0F1117`, cards `#1A1D28`, surfaces `#151822`)
 - All text colors (primary `#E8ECF4`, muted `#8B92A5`, subtle `#6B7280`)
 - All borders and dividers (`#2A2D3A`, `#22252F`)
-- Tinted surfaces (notification badges, session status, reaction pills)
+- Tinted surfaces (notification badges, reaction pills)
 - Input fields, textareas, and placeholders
 - Scrollbars
 - Shadows (darker in dark mode)
@@ -272,35 +311,6 @@ Shyft supports a full **Night Mode** (dark) and **Day Mode** (light) theme with 
 - Wallet adapter modals
 
 Animation elements (`animate-pulse`, `animate-spin`, `animate-fade-in`, etc.) are excluded from the transition to prevent visual jank.
-
----
-
-## MagicBlock Integration — TEE Privacy
-
-MagicBlock is used for **privacy and access control** via the Ephemeral Rollups SDK:
-
-### TEE Delegation Flow
-
-```
-User creates account → Permission created (access control) → PDA delegated to TEE (Intel TDX)
-```
-
-### Integration Points
-
-| Instruction | What it does | MagicBlock Feature |
-|-------------|-------------|-------------------|
-| `create_permission` | Restricts who can read/write a PDA inside TEE | **Access Control** |
-| `delegate_pda` | Moves PDA data into Intel TDX hardware | **TEE Delegation** |
-| `update_profile_privacy` | Toggles profile visibility via permission update | **Access Control** |
-| `undelegate` | Commits state and moves account back to Solana | **Commit & Undelegate** |
-
-### Programs Used
-
-| Program | Address | Purpose |
-|---------|---------|---------|
-| **Permission Program** | `ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1` | Access control on PDAs |
-| **Delegation Program** | `DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh` | Delegate PDAs to TEE |
-| **TEE Validator** | `FnE6VJT5QNZdedZPnCoLsARgBwoE6DeJNjBs2H1gySXA` | Intel TDX hardware validator |
 
 ---
 
@@ -317,25 +327,36 @@ User creates account → Permission created (access control) → PDA delegated t
 | **Comment** | `["comment", post, author, comment_index]` | Comment text, author, linked post, timestamp |
 | **Reaction** | `["reaction", post, user]` | Reaction type (0-5), user, linked post |
 | **FollowAccount** | `["follow", follower, following]` | Follower → following relationship, increments profile counters |
-| **Conversation** | `["conversation", participant1, participant2]` | Chat with message history |
+| **Chat** | `["chat", chatId]` | Chat metadata between two users (message counter, participants) |
+| **Message** | `["message", chatId, index]` | E2E encrypted message content (PLAIN:/ENC:/PUBKEY: prefixed ciphertext) |
 
 ### Instructions
 
-| Instruction | Session Key? | Description |
-|-------------|:------------:|-------------|
-| `create_profile` | — | Initialize profile PDA (username, display name, bio) |
-| `update_profile` | — | Update display name, bio, avatar URL, banner URL |
-| `create_post` | ✅ | Create post, increment author's post count |
-| `create_comment` | ✅ | Comment on a post |
-| `like_post` | ✅ | Increment post's like counter |
-| `react_to_post` | ✅ | Create reaction PDA (one per user per post) |
-| `follow_user` | — | Create follow account, increment follower/following counters |
-| `unfollow_user` | — | Close follow account, decrement counters |
-| `create_conversation` | — | Create chat between two users |
-| `send_conversation_message` | — | Add message to conversation |
-| `create_permission` | — | MagicBlock permission on PDA |
-| `delegate_pda` | — | Delegate PDA to TEE |
-| `undelegate` | — | Commit & undelegate back to Solana |
+| Instruction | Description |
+|-------------|-------------|
+| `create_profile` | Initialize profile PDA (username, display name, bio). Treasury pays rent |
+| `update_profile` | Update display name, bio, avatar URL, banner URL |
+| `create_post` | Create post, increment author's post count |
+| `create_comment` | Comment on a post |
+| `like_post` | Increment post's like counter |
+| `react_to_post` | Create reaction PDA (one per user per post) |
+| `follow_user` | Create follow account, increment follower/following counters |
+| `unfollow_user` | Close follow account, decrement counters |
+| `create_chat` | Create chat PDA between two users |
+| `send_message` | Send E2E encrypted message (ciphertext stored on-chain) |
+| `admin_force_close` | Admin-only: close any program account, reclaim rent |
+
+All instructions have a separate `payer: Signer` field — the treasury pays rent while the user only signs to prove identity.
+
+---
+
+## Backend API Routes
+
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/api/sponsor-tx` | `GET` | Returns treasury public key (fee payer address) |
+| `/api/sponsor-tx` | `POST` | Co-signs a transaction as fee payer. Frontend builds tx → user signs → backend adds treasury signature → submits to Solana |
+| `/api/upload` | `POST` | Image upload via ImgBB |
 
 ---
 
@@ -345,11 +366,11 @@ User creates account → Permission created (access control) → PDA delegated t
 
 | Component | File | Description |
 |-----------|------|-------------|
-| **Feed** | `Feed.tsx` | Post feed with comments, likes, reactions, reposts, share. Rich content rendering. Session key retry fallback. Auto-refresh every 8s. |
+| **Feed** | `Feed.tsx` | Post feed with comments, likes, reactions, reposts, share. Rich content rendering. Treasury-sponsored transactions. Auto-refresh every 8s. |
 | **Profile** | `Profile.tsx` | Profile page with posts tab, wallet management (balance, QR, export, fund), gold badges, interactive post cards. Supports viewing other users' profiles with follow/unfollow. |
 | **ProfileHoverCard** | `ProfileHoverCard.tsx` | X-style hover popup card with avatar, name, username, bio, follower/following/post counts. 400ms show delay, 300ms hide delay. |
 | **ThemeProvider** | `ThemeProvider.tsx` | Syncs Zustand `theme` state to `data-theme` attribute on `<html>` and updates `<meta theme-color>`. |
-| **Chat** | `Chat.tsx` | 1:1 messaging with TEE-protected messages |
+| **Chat** | `Chat.tsx` | E2E encrypted 1:1 messaging with NaCl Box. Key exchange via on-chain PUBKEY messages, PLAIN prefix for pre-key-exchange, ENC prefix for encrypted |
 | **Header** | `Header.tsx` | App header with theme toggle (Moon/Sun), notification bell (unread badge, dropdown panel), wallet button |
 | **Friends** | `Friends.tsx` | Follow/unfollow users, discover people |
 | **Payments** | `Payments.tsx` | SOL payment UI |
@@ -366,9 +387,9 @@ User creates account → Permission created (access control) → PDA delegated t
 
 | File | Purpose |
 |------|---------|
-| `src/lib/program.ts` | **ShyftClient** (~1785 lines) — All Solana interactions, caching, session key support, follow/unfollow, profile fetching |
+| `src/lib/program.ts` | **ShyftClient** — All Solana interactions, caching, treasury sponsorship, E2E encryption, follow/unfollow, profile fetching |
 | `src/lib/store.ts` | Zustand store — theme, notifications, liked posts, seen keys, viewingProfile, navigateToProfile, UI state |
-| `src/hooks/useSessionKey.ts` | Session key lifecycle — create, check, revoke, auto-fund |
+| `src/lib/encryption.ts` | NaCl Box E2E encryption — key derivation, encrypt, decrypt, PUBKEY/ENC/PLAIN message handling |
 | `src/hooks/useNotifications.ts` | On-chain polling every 5s for likes, comments, reactions, reposts, follows |
 | `src/hooks/useProgram.ts` | React hook for ShyftClient |
 | `src/hooks/usePrivatePayment.ts` | SOL transfer hook |
@@ -382,7 +403,7 @@ User creates account → Permission created (access control) → PDA delegated t
 ```
 shadowspace/
 ├── programs/shadowspace/
-│   ├── Cargo.toml                 # Rust deps (anchor, ephemeral-rollups-sdk, session-keys)
+│   ├── Cargo.toml                 # Rust deps (anchor)
 │   └── src/lib.rs                 # Solana program (~1092 lines)
 ├── src/
 │   ├── app/
@@ -390,14 +411,14 @@ shadowspace/
 │   │   ├── page.tsx               # Main page with tab routing
 │   │   ├── globals.css            # TailwindCSS styles + dark/light theme system
 │   │   └── api/
-│   │       ├── magicblock/route.ts # MagicBlock API proxy
-│   │       └── upload/route.ts    # Image upload API (ImgBB)
+│   │       ├── sponsor-tx/route.ts # Treasury co-signs txs as fee payer (zero-cost UX)
+│   │       └── upload/route.ts       # Image upload API (ImgBB)
 │   ├── components/
 │   │   ├── Feed.tsx               # Post feed with full interactions + ProfileHoverCards
-│   │   ├── Chat.tsx               # 1:1 messaging
+│   │   ├── Chat.tsx               # E2E encrypted 1:1 messaging (NaCl Box)
 │   │   ├── Payments.tsx           # SOL payments
 │   │   ├── Profile.tsx            # Profile + wallet management + view other users
-│   │   ├── ProfileSetup.tsx       # Onboarding
+│   │   ├── ProfileSetup.tsx       # First-time onboarding (treasury-sponsored)
 │   │   ├── ProfileHoverCard.tsx   # X-style hover popup card
 │   │   ├── ThemeProvider.tsx      # Dark/light theme sync
 │   │   ├── Friends.tsx            # Follow/discover
@@ -413,15 +434,13 @@ shadowspace/
 │   │   └── WalletProvider.tsx     # Privy embedded wallet setup
 │   ├── hooks/
 │   │   ├── useProgram.ts          # ShyftClient hook
-│   │   ├── useSessionKey.ts       # Session key management
 │   │   ├── useNotifications.ts    # On-chain notification polling (5s, clearRpcCache)
 │   │   ├── usePrivyWallet.ts      # Privy wallet hook (export private key)
 │   │   └── usePrivatePayment.ts   # SOL payment hook
 │   ├── lib/
-│   │   ├── program.ts             # ShyftClient — all Solana RPC interactions (~1785 lines)
+│   │   ├── program.ts             # ShyftClient — all Solana RPC interactions + treasury sponsorship
+│   │   ├── encryption.ts          # NaCl Box E2E encryption (X25519-XSalsa20-Poly1305)
 │   │   ├── store.ts               # Zustand state (theme, notifications, viewingProfile, etc.)
-│   │   ├── magicblock.ts          # MagicBlock API helpers
-│   │   ├── constants.ts           # Program IDs, URLs
 │   │   └── idl.json               # Anchor IDL
 │   └── types/
 │       ├── index.ts               # TypeScript interfaces
@@ -473,12 +492,12 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### 4. Sign In & Use
 
-1. Click **Sign In** — Privy creates an embedded Solana wallet (email, Google, etc.)
-2. **Create your profile** (username, display name, bio)
-3. **Post** — type something and hit post (stored on Solana!)
-4. **Interact** — like, comment, react, repost other posts
+1. Click **Sign In** — Privy creates an embedded Solana wallet (email, Google, etc.) — **no SOL needed**
+2. **Create your profile** (username, display name, bio) — treasury pays the rent
+3. **Post** — type something and hit post (stored on Solana!) — treasury-sponsored, zero cost
+4. **Interact** — like, comment, react, repost other posts — all gasless via treasury sponsorship
 5. **Click any username** to view their profile — hover for a preview card
-6. **Follow** people and chat with them
+6. **Follow** people and chat with them — E2E encrypted messages
 7. **Toggle Night Mode** 🌙 from the header, sidebar, or landing page
 8. **Check notifications** — bell icon shows real-time activity (polls every 5s)
 
@@ -493,6 +512,13 @@ npx vercel --prod
 ```
 
 Live at [https://www.shyft.lol](https://www.shyft.lol).
+
+#### Required Environment Variables (Vercel)
+
+| Variable | Description |
+|----------|-------------|
+| `TREASURY_PRIVATE_KEY` | JSON byte array of the platform treasury keypair (e.g. `[243,52,191,...]`). Used by `/api/sponsor-tx` to co-sign transactions |
+| `NEXT_PUBLIC_SOLANA_RPC_URL` | Solana RPC URL (defaults to devnet if not set) |
 
 ### Solana Program
 
@@ -511,8 +537,7 @@ Program ID: `EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ`
 |-------|-----------|
 | **Blockchain** | Solana (Devnet) |
 | **Smart Contract** | Anchor 0.32.1 (Rust) |
-| **Session Keys** | gari-network session-keys program |
-| **Privacy/TEE** | MagicBlock Ephemeral Rollups SDK 0.8.0, Intel TDX |
+| **E2E Encryption** | NaCl Box (X25519-XSalsa20-Poly1305) via `tweetnacl` |
 | **Frontend** | Next.js 16.1.7 (React 19, Turbopack) |
 | **Auth** | Privy `@privy-io/react-auth` ^3.18.0 (embedded Solana wallets) |
 | **Styling** | Tailwind CSS 4.2 |
@@ -521,28 +546,54 @@ Program ID: `EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ`
 | **Images** | ImgBB API |
 | **Deployment** | Vercel |
 | **RPC** | Helius Devnet |
+| **Treasury** | Platform treasury wallet sponsors all gas + rent (~$0.002 per user) |
 
 ---
 
 ## How It Works
 
-1. **Everything is on-chain.** Posts, comments, likes, reactions, follows, reposts, profiles, and chat messages are all Solana program accounts. Each interaction is a signed transaction.
+1. **Everything is on-chain.** Posts, comments, likes, reactions, follows, reposts, profiles, and E2E encrypted chat messages are all Solana program accounts. Each interaction is a signed transaction.
 
-2. **Session keys eliminate friction.** After a one-time session creation (one wallet signature + 0.05 SOL deposit), all interactions are signed by an ephemeral keypair — no more wallet popups. If the session runs low on SOL, the app automatically falls back to direct wallet signing.
+2. **Zero-cost for users.** The platform treasury pays all transaction fees and account rent. Users never need SOL. Profile creation and all interactions are sponsored by the treasury via `/api/sponsor-tx`.
 
-3. **Privy makes onboarding easy.** Users sign in with email, Google, or any social provider. Privy creates an embedded Solana wallet — no browser extension needed. Users can export their private key or view their wallet on Solana Explorer.
+3. **Privy embedded wallets sign silently.** After connecting via email or social login, Privy creates an embedded Solana wallet. All subsequent transactions are signed silently by Privy — no wallet popups, no browser extensions, no SOL needed.
 
-4. **Real-time notifications via on-chain polling.** Every 5 seconds, the app fetches all comments, reactions, follows, and posts from the chain, diffs against what it's seen before, and surfaces new activity as notifications. Self-interactions are filtered out. First poll on page load seeds all existing keys to prevent duplicate notifications on refresh.
+4. **Privy makes onboarding easy.** Users sign in with email, Google, or any social provider. Privy creates an embedded Solana wallet — no browser extension needed, no SOL needed. Users can export their private key or view their wallet on Solana Explorer.
 
-5. **TEE privacy for sensitive data.** Posts and messages can be delegated to MagicBlock's TEE validator (Intel TDX), where data is hardware-encrypted and only accessible to permissioned pubkeys.
+5. **E2E encrypted chat.** Messages between users are encrypted with NaCl Box (X25519-XSalsa20-Poly1305). Keys are derived from wallet signatures and exchanged on-chain. Only the sender and receiver can decrypt — the server, validators, and explorers see only ciphertext.
 
-6. **Reposts are on-chain posts.** When you repost someone's content, a new post is created on-chain with the format `RT|@original_author|content`. The feed detects this prefix and renders it as a styled quote card. The original author receives a repost notification.
+6. **Real-time notifications via on-chain polling.** Every 5 seconds, the app fetches all comments, reactions, follows, and posts from the chain, diffs against what it's seen before, and surfaces new activity as notifications. Self-interactions are filtered out.
 
-7. **Clickable profiles like X/Twitter.** Every username and avatar in the feed is clickable — navigates to that user's full profile with their posts, follower/following counts, and a follow/unfollow button. Hovering shows an X-style popup card with their avatar, bio, and stats.
+7. **On-chain verifiable data.** Every post, comment, like, reaction, follow, and message is a Solana transaction. Anyone can verify the data on-chain via Solana Explorer — full transparency and ownership.
 
-8. **Dark/light theme.** Users can toggle between Night Mode and Day Mode from the header, sidebar, or landing page. The theme is persisted across sessions via localStorage. All colors, backgrounds, borders, shadows, inputs, scrollbars, and hover states adapt with smooth 200ms transitions.
+8. **Reposts are on-chain posts.** When you repost someone's content, a new post is created on-chain with the format `RT|@original_author|content`. The feed detects this prefix and renders it as a styled quote card.
 
-9. **Live feed.** The feed auto-refreshes every 8 seconds — fetching new posts, updated like counts, comments, and reactions from the chain with cache busting to ensure freshness.
+9. **Clickable profiles like X/Twitter.** Every username and avatar in the feed is clickable — navigates to that user's full profile with their posts, follower/following counts, and a follow/unfollow button. Hovering shows an X-style popup card.
+
+10. **Dark/light theme.** Users can toggle between Night Mode and Day Mode from the header, sidebar, or landing page. The theme is persisted across sessions via localStorage.
+
+11. **Admin tools.** `admin_force_close` instruction lets the upgrade authority close any program account and reclaim rent — used for devnet cleanup and account management.
+
+12. **Live feed.** The feed auto-refreshes every 8 seconds — fetching new posts, updated like counts, comments, and reactions from the chain with cache busting to ensure freshness.
+
+---
+
+## Coming Soon
+
+### 🚀 On-Chain Promoted Posts (Ad System)
+
+A fully on-chain, transparent advertising system — like X's promoted tweets, but decentralized on Solana.
+
+- **Anyone can promote their post** by paying SOL — the more you pay, the higher and longer it appears in everyone's feed
+- **All ad spend goes to the platform treasury wallet** — fully verifiable on-chain
+- **Non-followers see promoted posts too** — promoters pay to reach new audiences, just like X ads
+- **Transparent pricing** — promotion cost and duration are stored on-chain, visible to everyone
+- **No middleman approval** — permissionless, can't be censored or de-boosted arbitrarily
+- **Tiered duration** — e.g. 0.01 SOL = 6 hours, 0.05 SOL = 24 hours, 0.1 SOL = 3 days at top of feed
+- **"Promoted" badge** — clearly labeled in the feed so users know it's a paid placement
+- **Feed algorithm** — promoted posts sorted by SOL spent, inserted at top / every Nth position
+
+This is the primary revenue model for the platform.
 
 ---
 

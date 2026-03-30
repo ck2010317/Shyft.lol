@@ -1,12 +1,12 @@
 "use client";
 
-import { Newspaper, MessageCircle, Wallet, User, BarChart3, Users } from "lucide-react";
+import { Newspaper, MessageCircle, Wallet, User, BarChart3, Users, Coins } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 
 const navItems = [
   { id: "feed", label: "Feed", icon: Newspaper },
   { id: "chat", label: "Chat", icon: MessageCircle },
-  { id: "friends", label: "People", icon: Users },
+  { id: "tokens", label: "Tokens", icon: Coins },
   { id: "payments", label: "Pay", icon: Wallet },
   { id: "profile", label: "Me", icon: User },
 ];

@@ -41,6 +41,8 @@
     "test-*.js",
     "test-p2p/**",
     "check-balance.ts",
+    "close-chat.ts",
+    "nuke-chat.ts",
     "programs/**",
     "target/**"
   ]

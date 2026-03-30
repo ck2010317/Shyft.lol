@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Shield, MessageCircle, Wallet, Lock, Users, ArrowRight, Zap, Eye, EyeOff, ChevronRight, Sparkles, Sun, Moon } from "lucide-react";
+import { Shield, MessageCircle, Wallet, Lock, Users, ArrowRight, Zap, ChevronRight, Sparkles, Sun, Moon } from "lucide-react";
 import { useWallet } from "@/hooks/usePrivyWallet";
 import { useAppStore } from "@/lib/store";
 
@@ -22,7 +22,7 @@ const features = [
   {
     icon: MessageCircle,
     title: "Encrypted Chat",
-    description: "Messages routed through MagicBlock's TEE. Not even the app can read your conversations.",
+    description: "End-to-end encrypted with NaCl Box. Not even the app can read your conversations.",
     color: "#16A34A",
     bgColor: "#F0FDF4",
     preview: {
@@ -36,13 +36,13 @@ const features = [
   },
   {
     icon: Wallet,
-    title: "Stealth Payments",
-    description: "Send USDC privately via Private Ephemeral Rollups. On-chain observers see nothing.",
+    title: "Instant Payments",
+    description: "Send SOL directly to friends on Solana. Fast, cheap, and recorded on-chain.",
     color: "#2563EB",
     bgColor: "#EFF6FF",
     preview: {
       type: "payment",
-      steps: ["Deposit into PER", "Transfer inside TEE", "Recipient withdraws"],
+      steps: ["Enter recipient & amount", "Sign the transaction", "SOL arrives instantly"],
     },
   },
   {
@@ -82,7 +82,7 @@ export default function Landing() {
           </div>
           <div>
             <h1 className="text-base sm:text-lg font-bold text-[#1A1A2E]">Shyft</h1>
-            <p className="text-[9px] sm:text-[10px] text-[#64748B] -mt-0.5">Private Social</p>
+            <p className="text-[9px] sm:text-[10px] text-[#64748B] -mt-0.5">On-Chain Social</p>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
@@ -115,18 +115,18 @@ export default function Landing() {
         {/* Badge */}
         <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 bg-white border border-[#E2E8F0] rounded-full mb-5 sm:mb-6 shadow-sm">
           <div className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse" />
-          <span className="text-[10px] sm:text-xs font-medium text-[#64748B]">Built on Solana with MagicBlock PERs</span>
+          <span className="text-[10px] sm:text-xs font-medium text-[#64748B]">Built on Solana · Zero Gas Fees</span>
         </div>
 
         {/* Title */}
         <h2 className="text-3xl sm:text-4xl md:text-6xl font-bold text-center text-[#1A1A2E] max-w-3xl leading-tight">
           Social that&apos;s{" "}
           <span className="bg-gradient-to-r from-[#2563EB] to-[#16A34A] bg-clip-text text-transparent">
-            actually private
+            fully on-chain
           </span>
         </h2>
         <p className="text-base sm:text-lg md:text-xl text-[#64748B] text-center max-w-xl mt-3 sm:mt-4 leading-relaxed px-2">
-          Post, chat, and send payments — all encrypted inside hardware-secured TEEs on Solana. Not even we can see your data.
+          Post, chat, and send payments — all on Solana. Own your data, your identity, and your social graph.
         </p>
 
         {/* CTA */}
@@ -155,15 +155,15 @@ export default function Landing() {
         <div className="grid grid-cols-2 sm:flex sm:items-center gap-3 sm:gap-6 mt-8 sm:mt-12 w-full sm:w-auto justify-center">
           <div className="flex items-center gap-2 text-[10px] sm:text-xs text-[#94A3B8] justify-center">
             <Lock className="w-3.5 h-3.5 text-[#16A34A] flex-shrink-0" />
-            <span>Intel TDX Encrypted</span>
+            <span>E2E Encrypted Chat</span>
           </div>
           <div className="flex items-center gap-2 text-[10px] sm:text-xs text-[#94A3B8] justify-center">
             <Shield className="w-3.5 h-3.5 text-[#2563EB] flex-shrink-0" />
-            <span>On-Chain Permissions</span>
+            <span>On-Chain Posts & Profiles</span>
           </div>
           <div className="flex items-center gap-2 text-[10px] sm:text-xs text-[#94A3B8] justify-center">
-            <EyeOff className="w-3.5 h-3.5 text-[#16A34A] flex-shrink-0" />
-            <span>Zero-Knowledge Payments</span>
+            <Wallet className="w-3.5 h-3.5 text-[#16A34A] flex-shrink-0" />
+            <span>Zero Gas Fees for Users</span>
           </div>
           <div className="flex items-center gap-2 text-[10px] sm:text-xs text-[#94A3B8] justify-center">
             <Zap className="w-3.5 h-3.5 text-[#2563EB] flex-shrink-0" />
@@ -180,7 +180,7 @@ export default function Landing() {
               Everything you love about social.{" "}
               <span className="text-[#64748B]">Nothing you don&apos;t.</span>
             </h3>
-            <p className="text-xs sm:text-sm text-[#94A3B8] mt-2 sm:mt-3">Every feature is powered by MagicBlock Private Ephemeral Rollups</p>
+            <p className="text-xs sm:text-sm text-[#94A3B8] mt-2 sm:mt-3">Every feature lives on Solana — your data, your rules</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-4 sm:gap-8 items-start">
@@ -257,7 +257,7 @@ export default function Landing() {
                       <div className="w-8 h-8 rounded-full bg-[#EBF4FF] flex items-center justify-center text-sm">{"\u{1F469}"}</div>
                       <div>
                         <p className="text-xs font-semibold text-[#1A1A2E]">Alice</p>
-                        <p className="text-[10px] text-[#16A34A] flex items-center gap-0.5"><Shield className="w-2 h-2" /> Encrypted via PER</p>
+                        <p className="text-[10px] text-[#16A34A] flex items-center gap-0.5"><Shield className="w-2 h-2" /> E2E Encrypted</p>
                       </div>
                     </div>
                     <div className="p-4 space-y-2.5">
@@ -350,28 +350,28 @@ export default function Landing() {
       {/* How it works */}
       <div className="px-4 sm:px-6 md:px-12 py-12 sm:py-16 bg-gradient-to-br from-[#EFF6FF] to-[#F0FDF4] border-t border-[#E2E8F0]">
         <div className="max-w-4xl mx-auto text-center">
-          <h3 className="text-xl sm:text-2xl font-bold text-[#1A1A2E] mb-6 sm:mb-8">How Shyft keeps you private</h3>
+          <h3 className="text-xl sm:text-2xl font-bold text-[#1A1A2E] mb-6 sm:mb-8">How Shyft works</h3>
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
             <div className="bg-white rounded-2xl p-5 sm:p-6 border border-[#E2E8F0] shadow-sm">
               <div className="w-12 h-12 rounded-xl bg-[#EFF6FF] flex items-center justify-center mx-auto mb-4">
                 <span className="text-xl font-bold text-[#2563EB]">1</span>
               </div>
-              <h4 className="text-sm font-semibold text-[#1A1A2E] mb-2">Your data goes into a TEE</h4>
-              <p className="text-xs text-[#64748B]">Trusted Execution Environment on Intel TDX. Like a vault inside the CPU — no one can peek in.</p>
+              <h4 className="text-sm font-semibold text-[#1A1A2E] mb-2">Sign in — zero setup</h4>
+              <p className="text-xs text-[#64748B]">Use email, Google, Twitter, or your wallet. We create a secure embedded wallet — no extensions, no SOL needed.</p>
             </div>
             <div className="bg-white rounded-2xl p-5 sm:p-6 border border-[#E2E8F0] shadow-sm">
               <div className="w-12 h-12 rounded-xl bg-[#F0FDF4] flex items-center justify-center mx-auto mb-4">
                 <span className="text-xl font-bold text-[#16A34A]">2</span>
               </div>
-              <h4 className="text-sm font-semibold text-[#1A1A2E] mb-2">Permissions live on Solana</h4>
-              <p className="text-xs text-[#64748B]">You decide who sees what via MagicBlock&apos;s Permission Program. Bitmask-level access control.</p>
+              <h4 className="text-sm font-semibold text-[#1A1A2E] mb-2">Everything lives on Solana</h4>
+              <p className="text-xs text-[#64748B]">Posts, profiles, follows, chats — all stored as on-chain accounts. Your data is permanent and owned by your wallet.</p>
             </div>
             <div className="bg-white rounded-2xl p-5 sm:p-6 border border-[#E2E8F0] shadow-sm">
               <div className="w-12 h-12 rounded-xl bg-[#EFF6FF] flex items-center justify-center mx-auto mb-4">
                 <span className="text-xl font-bold text-[#2563EB]">3</span>
               </div>
-              <h4 className="text-sm font-semibold text-[#1A1A2E] mb-2">Only you hold the keys</h4>
-              <p className="text-xs text-[#64748B]">Sign in with email, Google, Twitter, or your wallet. We create a secure embedded wallet for you — no extensions needed.</p>
+              <h4 className="text-sm font-semibold text-[#1A1A2E] mb-2">Gas fees? We got you</h4>
+              <p className="text-xs text-[#64748B]">The platform sponsors all transaction fees. Post, chat, and interact without ever needing SOL in your wallet.</p>
             </div>
           </div>
         </div>
@@ -382,8 +382,8 @@ export default function Landing() {
         <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-[#2563EB] to-[#16A34A] flex items-center justify-center mx-auto mb-5 sm:mb-6">
           <Shield className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
         </div>
-        <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#1A1A2E] mb-3">Ready to take back your privacy?</h3>
-        <p className="text-xs sm:text-sm text-[#64748B] mb-6 sm:mb-8 max-w-md mx-auto">Sign in with email, Google, Twitter, or your Solana wallet — and start using the first truly private social platform.</p>
+        <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#1A1A2E] mb-3">Ready to own your social?</h3>
+        <p className="text-xs sm:text-sm text-[#64748B] mb-6 sm:mb-8 max-w-md mx-auto">Sign in with email, Google, Twitter, or your Solana wallet — and start using the first fully on-chain social platform.</p>
         <button
           onClick={login}
           disabled={!ready}
@@ -405,7 +405,7 @@ export default function Landing() {
             </div>
             <span className="text-xs font-semibold text-[#64748B]">Shyft</span>
           </div>
-          <p className="text-[9px] sm:text-[10px] text-[#94A3B8] text-center">Built with MagicBlock Private Ephemeral Rollups on Solana</p>
+          <p className="text-[9px] sm:text-[10px] text-[#94A3B8] text-center">Fully on-chain social built on Solana</p>
         </div>
       </footer>
     </div>

@@ -34,7 +34,7 @@ export default function WalletProvider({ children }: { children: React.ReactNode
           accentColor: "#2563EB",
           logo: "/favicon.svg",
           landingHeader: "Welcome to Shyft",
-          loginMessage: "Sign in to access private social on Solana",
+          loginMessage: "Sign in to Shyft — on-chain social on Solana",
           walletChainType: "solana-only",
           walletList: ["phantom", "solflare", "backpack", "detected_solana_wallets"],
         },

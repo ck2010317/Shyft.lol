@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { ArrowUpRight, ArrowDownLeft, Shield, Lock, Send, DollarSign, ExternalLink, Eye, EyeOff, ChevronDown, Wallet, Check, RefreshCw } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { usePrivatePayment } from "@/hooks/usePrivatePayment";
-import { useProgram } from "@/hooks/useProgram";
 import type { Payment } from "@/types";
 
 function timeAgo(timestamp: number): string {
@@ -25,64 +24,33 @@ export default function Payments() {
   const [amount, setAmount] = useState("");
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const { sendPayment, step: paymentStep, error: paymentError, txSignature, reset: resetPayment } = usePrivatePayment();
-  const program = useProgram();
 
-  // On-chain payment records (includes both sent & received)
-  const [onChainPayments, setOnChainPayments] = useState<Payment[]>([]);
+  // Payment records from local state
   const [loadingOnChain, setLoadingOnChain] = useState(false);
 
   const loadOnChainPayments = useCallback(async () => {
-    if (!program) return;
-    setLoadingOnChain(true);
-    try {
-      console.log("📡 Loading on-chain payment records...");
-      const chainPayments = await program.getAllPaymentsForUser();
-      console.log(`✅ Found ${chainPayments.length} on-chain payment records`);
-      setOnChainPayments(chainPayments);
-    } catch (err) {
-      console.error("Failed to load on-chain payments:", err);
-    }
+    // Payments are tracked locally
     setLoadingOnChain(false);
-  }, [program]);
+  }, []);
 
   // Load on-chain payments on mount and when program becomes available
   useEffect(() => {
-    if (program && isConnected) {
+    if (isConnected) {
       loadOnChainPayments();
     }
-  }, [program, isConnected, loadOnChainPayments]);
+  }, [isConnected, loadOnChainPayments]);
 
   // Reload after a payment is sent
   useEffect(() => {
-    if (paymentStep === "done" && program) {
-      // Give a short delay for on-chain data to settle
+    if (paymentStep === "done") {
       const timer = setTimeout(() => loadOnChainPayments(), 3000);
       return () => clearTimeout(timer);
     }
-  }, [paymentStep, program, loadOnChainPayments]);
+  }, [paymentStep, loadOnChainPayments]);
 
-  // Merge local (sent) payments with on-chain payments, deduplicating by id
+  // Use local payment records
   const allPayments = (() => {
-    const seen = new Set<string>();
-    const merged: Payment[] = [];
-
-    // On-chain payments take priority (they have real on-chain data)
-    for (const p of onChainPayments) {
-      if (!seen.has(p.id)) {
-        seen.add(p.id);
-        merged.push(p);
-      }
-    }
-
-    // Add local payments that aren't already on-chain
-    for (const p of localPayments) {
-      if (!seen.has(p.id)) {
-        seen.add(p.id);
-        merged.push(p);
-      }
-    }
-
-    return merged.sort((a, b) => b.timestamp - a.timestamp);
+    return [...localPayments].sort((a, b) => b.timestamp - a.timestamp);
   })();
 
   const totalSent = allPayments.filter((p) => p.sender === "me").reduce((sum, p) => sum + p.amount, 0);
@@ -95,8 +63,8 @@ export default function Payments() {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#EFF6FF] to-[#F0FDF4] flex items-center justify-center mx-auto mb-4">
             <Wallet className="w-8 h-8 text-[#2563EB]" />
           </div>
-          <h3 className="text-lg font-bold text-[#1A1A2E] mb-2">Private Payments</h3>
-          <p className="text-sm text-[#64748B]">Connect your wallet to send and receive private payments</p>
+          <h3 className="text-lg font-bold text-[#1A1A2E] mb-2">Payments</h3>
+          <p className="text-sm text-[#64748B]">Connect your wallet to send and receive payments</p>
         </div>
       </div>
     );
@@ -115,7 +83,7 @@ export default function Payments() {
           </div>
           <p className="text-xl sm:text-2xl font-bold text-[#1A1A2E]">{totalSent.toFixed(2)} <span className="text-xs sm:text-sm font-medium text-[#64748B]">SOL</span></p>
           <p className="text-[10px] text-[#16A34A] flex items-center gap-1 mt-1">
-            <Shield className="w-2.5 h-2.5" /> All transfers private
+            <Shield className="w-2.5 h-2.5" /> On-chain transfers
           </p>
         </div>
         <div className="bg-white rounded-2xl border border-[#E2E8F0] p-3.5 sm:p-5">
@@ -127,7 +95,7 @@ export default function Payments() {
           </div>
           <p className="text-xl sm:text-2xl font-bold text-[#1A1A2E]">{totalReceived.toFixed(2)} <span className="text-xs sm:text-sm font-medium text-[#64748B]">SOL</span></p>
           <p className="text-[10px] text-[#16A34A] flex items-center gap-1 mt-1">
-            <Shield className="w-2.5 h-2.5" /> Received privately
+            <Shield className="w-2.5 h-2.5" /> Received on-chain
           </p>
         </div>
       </div>
@@ -143,7 +111,7 @@ export default function Payments() {
               <Send className="w-4 h-4 text-white" />
             </div>
             <div className="text-left">
-              <p className="text-sm font-semibold text-[#1A1A2E]">Send Private Payment</p>
+              <p className="text-sm font-semibold text-[#1A1A2E]">Send Payment</p>
               <p className="text-[10px] sm:text-[11px] text-[#64748B]">Send SOL to friends on Solana</p>
             </div>
           </div>
@@ -192,7 +160,7 @@ export default function Payments() {
               </div>
               <div className="flex items-center gap-2 text-xs text-[#475569]">
                 <span className="w-5 h-5 rounded-full bg-[#16A34A] text-white flex items-center justify-center text-[10px] font-bold">3</span>
-                <span>Create MagicBlock permission &amp; delegate to TEE</span>
+                <span>Confirmed on Solana</span>
                 <Shield className="w-3 h-3 text-[#16A34A] ml-auto" />
               </div>
             </div>
@@ -206,7 +174,7 @@ export default function Payments() {
                     {paymentStep === "sending" && "Sending SOL payment..."}
                     {paymentStep === "confirming" && "Confirming transaction..."}
                     {paymentStep === "recording" && "Recording payment on-chain..."}
-                    {paymentStep === "delegating" && "Delegating to MagicBlock TEE..."}
+                    {paymentStep === "delegating" && "Finalizing..."}
                   </span>
                 </div>
                 <div className="flex gap-1">
@@ -224,7 +192,7 @@ export default function Payments() {
                   <div className="w-5 h-5 rounded-full bg-[#16A34A] flex items-center justify-center">
                     <Check className="w-3 h-3 text-white" />
                   </div>
-                  <span className="text-sm font-semibold text-[#15803D]">Payment Sent &amp; Protected by MagicBlock TEE!</span>
+                  <span className="text-sm font-semibold text-[#15803D]">Payment Sent!</span>
                 </div>
                 <a
                   href={`https://explorer.solana.com/tx/${txSignature}?cluster=devnet`}
@@ -251,18 +219,18 @@ export default function Payments() {
             )}
 
             <button
-              onClick={() => sendPayment(recipient, parseFloat(amount), program)}
+              onClick={() => sendPayment(recipient, parseFloat(amount))}
               disabled={!recipient || !amount || !["idle", "done", "error"].includes(paymentStep)}
               className="w-full py-3 bg-gradient-to-r from-[#2563EB] to-[#16A34A] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md"
             >
               {["sending", "confirming", "recording", "delegating"].includes(paymentStep)
                 ? paymentStep === "recording" ? "Recording on-chain..."
-                  : paymentStep === "delegating" ? "Delegating to TEE..."
+                  : paymentStep === "delegating" ? "Finalizing..."
                   : "Processing..."
                 : "Send Payment"}
             </button>
             <p className="text-[10px] text-center text-[#94A3B8] flex items-center justify-center gap-1">
-              <Shield className="w-2.5 h-2.5" /> Payment record is protected by MagicBlock TEE
+              <Shield className="w-2.5 h-2.5" /> Payment recorded on Solana
             </p>
           </div>
         )}
@@ -278,7 +246,7 @@ export default function Payments() {
             <div className="w-10 h-10 rounded-xl bg-[#EFF6FF] flex items-center justify-center">
               <Eye className="w-4 h-4 text-[#2563EB]" />
             </div>
-            <p className="text-sm font-semibold text-[#1A1A2E]">How Private Payments Work</p>
+            <p className="text-sm font-semibold text-[#1A1A2E]">How Payments Work</p>
           </div>
           <ChevronDown className={`w-4 h-4 text-[#94A3B8] transition-transform ${showHowItWorks ? "rotate-180" : ""}`} />
         </button>
@@ -301,7 +269,7 @@ export default function Payments() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-[#1A1A2E]">Payment Recorded On-Chain</p>
-                  <p className="text-xs text-[#64748B] mt-0.5">The payment is recorded as a message in your chat with MagicBlock permissions restricting access to participants only.</p>
+                  <p className="text-xs text-[#64748B] mt-0.5">The payment is recorded as a message in your chat so both participants can see the transaction history.</p>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -309,13 +277,13 @@ export default function Payments() {
                   <span className="text-xs font-bold text-[#16A34A]">3</span>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-[#1A1A2E]">Message Delegated to TEE</p>
-                  <p className="text-xs text-[#64748B] mt-0.5">The payment message PDA is delegated to MagicBlock&apos;s Trusted Execution Environment, protecting the payment record inside Intel TDX hardware.</p>
+                  <p className="text-sm font-medium text-[#1A1A2E]">Confirmed on Solana</p>
+                  <p className="text-xs text-[#64748B] mt-0.5">The transaction is confirmed on the Solana blockchain. Fast, reliable, and permanent.</p>
                 </div>
               </div>
               <div className="bg-[#F8FAFC] rounded-xl p-3 mt-2">
                 <p className="text-xs text-[#64748B]">
-                  <span className="font-semibold text-[#1A1A2E]">MagicBlock TEE Protection:</span> Payment records are delegated to TEE hardware, ensuring only <span className="text-[#16A34A] font-medium">chat participants can see payment details</span>.
+                  <span className="font-semibold text-[#1A1A2E]">On-Chain Records:</span> All payments are recorded on Solana so <span className="text-[#16A34A] font-medium">both participants have a verifiable transaction history</span>.
                 </p>
               </div>
             </div>
@@ -328,7 +296,7 @@ export default function Payments() {
         <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-[#F1F5F9] flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-[#1A1A2E]">Transaction History</h3>
-            <p className="text-[10px] sm:text-[11px] text-[#64748B]">Payment records protected by MagicBlock TEE</p>
+            <p className="text-[10px] sm:text-[11px] text-[#64748B]">All payments recorded on Solana</p>
           </div>
           <button
             onClick={loadOnChainPayments}
