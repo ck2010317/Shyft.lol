@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { BagsSDK, BAGS_FEE_SHARE_V2_PROGRAM_ID } from "@bagsfm/bags-sdk";
+import { BagsSDK } from "@bagsfm/bags-sdk";
 
 /**
  * /api/bags — Bags API proxy for token launch, trading, fees, and analytics.
@@ -10,11 +10,13 @@ import { BagsSDK, BAGS_FEE_SHARE_V2_PROGRAM_ID } from "@bagsfm/bags-sdk";
  */
 
 const BAGS_API_KEY = (process.env.BAGS_API_KEY || "").trim();
-const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
-const BAGS_PARTNER_CONFIG = "B94bGwVuX7tWX8VkkyBZLmQESJ537URMcJcVkF8tdi5T";
+// Bags operates on Solana mainnet — use a mainnet RPC (separate from app's devnet RPC)
+const BAGS_RPC_URL = process.env.BAGS_MAINNET_RPC_URL || "https://api.mainnet-beta.solana.com";
+// Bags config key (Meteora config key from Bags partner dashboard — NOT a wallet)
+const BAGS_CONFIG_KEY = "B94bGwVuX7tWX8VkkyBZLmQESJ537URMcJcVkF8tdi5T";
 
 function getSDK() {
-  const connection = new Connection(RPC_URL, "confirmed");
+  const connection = new Connection(BAGS_RPC_URL, "confirmed");
   return new BagsSDK(BAGS_API_KEY, connection, "confirmed");
 }
 
@@ -145,7 +147,7 @@ export async function POST(req: NextRequest) {
           tokenMint: new PublicKey(tokenMint),
           launchWallet: new PublicKey(launchWallet),
           initialBuyLamports: initialBuyLamports || 0,
-          configKey: new PublicKey(configKey || BAGS_PARTNER_CONFIG),
+          configKey: new PublicKey(configKey || BAGS_CONFIG_KEY),
         });
 
         // Serialize the unsigned transaction for the frontend to sign
@@ -217,13 +219,7 @@ export async function POST(req: NextRequest) {
           return err("Missing payerWallet or tokenMint");
         }
 
-        // Build the fee claimers array with Shyft partner config
-        const partnerWallet = new PublicKey(BAGS_PARTNER_CONFIG);
-        const [partnerConfigPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("partner_config"), partnerWallet.toBuffer()],
-          new PublicKey(BAGS_FEE_SHARE_V2_PROGRAM_ID)
-        );
-
+        // Build fee share config (partner fee sharing via BAGS_CONFIG_KEY in launch tx)
         const configResult = await sdk.config.createBagsFeeShareConfig({
           payer: new PublicKey(payerWallet),
           baseMint: new PublicKey(tokenMint),
@@ -231,8 +227,6 @@ export async function POST(req: NextRequest) {
             user: new PublicKey(fc.wallet),
             userBps: fc.bps,
           })),
-          partner: partnerWallet,
-          partnerConfig: partnerConfigPda,
         });
 
         const transactions = (configResult.transactions || []).map((tx: any) =>

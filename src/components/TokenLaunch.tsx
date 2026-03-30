@@ -110,8 +110,9 @@ export default function TokenLaunch({ onClose, onSuccess, username }: TokenLaunc
       const configData = await configRes.json();
       if (!configData.success) throw new Error(configData.error || "Failed to create fee config");
 
+      // Bags operates on mainnet
       const connection = new Connection(
-        process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com",
+        process.env.NEXT_PUBLIC_BAGS_MAINNET_RPC_URL || "https://api.mainnet-beta.solana.com",
         "confirmed"
       );
 
