@@ -28,7 +28,8 @@ function getTreasuryKeypair(): Keypair {
   return Keypair.fromSecretKey(new Uint8Array(bytes));
 }
 
-const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1";
+// Shadowspace on-chain program is on devnet — sponsor-tx must use devnet
+const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://devnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1";
 
 // Rate limit: max 10 sponsored tx per wallet per minute
 const txTimestamps = new Map<string, number[]>();

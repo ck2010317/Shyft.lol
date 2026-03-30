@@ -10,15 +10,19 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useWallets as usePrivyWallets } from "@privy-io/react-auth/solana";
 import { Connection, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 
-/** Helius mainnet RPC */
+/** Helius devnet RPC — used for Shadowspace on-chain program (profiles, posts) */
+export const HELIUS_DEVNET_RPC =
+  "https://devnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1";
+
+/** Helius mainnet RPC — used for Bags token operations */
 export const HELIUS_MAINNET_RPC =
   "https://mainnet.helius-rpc.com/?api-key=7d359733-8771-4d20-af8c-54f756c96bb1";
 
-/** Shared connection (mainnet via Helius) */
+/** Shared connection (devnet — for Shadowspace program via Anchor) */
 let _sharedConnection: Connection | null = null;
 export function getSharedConnection(): Connection {
   if (!_sharedConnection) {
-    _sharedConnection = new Connection(HELIUS_MAINNET_RPC, "confirmed");
+    _sharedConnection = new Connection(HELIUS_DEVNET_RPC, "confirmed");
   }
   return _sharedConnection;
 }
