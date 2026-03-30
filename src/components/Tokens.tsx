@@ -100,7 +100,7 @@ export default function Tokens() {
       const feedData = await feedRes.json();
       const feedTokens: TokenItem[] = feedData.success && Array.isArray(feedData.response) ? feedData.response : [];
 
-      // Find tokens created by this wallet (check creators for each of user's mints)
+      // Match claimable mints against the feed for full token info
       const matched: TokenItem[] = [];
       for (const mint of myMints) {
         const feedMatch = feedTokens.find((t) => t.tokenMint === mint);
@@ -116,25 +116,6 @@ export default function Tokens() {
             tokenMint: mint,
             status: "UNKNOWN",
           });
-        }
-      }
-
-      // Also check feed for tokens where this wallet is the creator
-      const walletStr = publicKey.toBase58();
-      for (const token of feedTokens) {
-        if (!myMints.has(token.tokenMint)) {
-          try {
-            const creatorsRes = await fetch(`/api/bags?action=creators&mint=${token.tokenMint}`);
-            const creatorsData = await creatorsRes.json();
-            if (creatorsData.success && Array.isArray(creatorsData.response)) {
-              const isCreator = creatorsData.response.some(
-                (c: any) => c.wallet === walletStr && c.isCreator
-              );
-              if (isCreator) matched.push(token);
-            }
-          } catch {
-            // skip — rate limit or error
-          }
         }
       }
 
