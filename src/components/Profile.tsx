@@ -41,6 +41,7 @@ import { toast } from "@/components/Toast";
 import { RichContent } from "@/components/RichContent";
 import { uploadImage } from "@/components/RichContent";
 import { ShyftClient, clearRpcCache } from "@/lib/program";
+import FollowListModal from "@/components/FollowListModal";
 
 /* ───────── Types ───────── */
 interface OnChainPost {
@@ -433,6 +434,10 @@ export default function Profile() {
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
 
+  /* ── Follow list modal ── */
+  const [showFollowList, setShowFollowList] = useState(false);
+  const [followListTab, setFollowListTab] = useState<"verified_followers" | "followers" | "following">("followers");
+
   useEffect(() => {
     if (!isViewingOther || !program || !targetPubkey) return;
     program.isFollowing(targetPubkey).then(setIsFollowingUser).catch(() => {});
@@ -775,17 +780,33 @@ export default function Profile() {
 
         {/* Following / Followers */}
         <div className="flex gap-4 mt-3">
-          <button className="group flex items-center gap-1 hover:underline decoration-[#1A1A2E]">
+          <button
+            onClick={() => { setFollowListTab("following"); setShowFollowList(true); }}
+            className="group flex items-center gap-1 hover:underline decoration-[#1A1A2E]"
+          >
             <span className="text-sm font-bold text-[#1A1A2E]">{followingCount}</span>
             <span className="text-sm text-[#64748B] group-hover:text-[#1A1A2E] transition-colors">Following</span>
           </button>
-          <button className="group flex items-center gap-1 hover:underline decoration-[#1A1A2E]">
+          <button
+            onClick={() => { setFollowListTab("followers"); setShowFollowList(true); }}
+            className="group flex items-center gap-1 hover:underline decoration-[#1A1A2E]"
+          >
             <span className="text-sm font-bold text-[#1A1A2E]">{followerCount}</span>
             <span className="text-sm text-[#64748B] group-hover:text-[#1A1A2E] transition-colors">
               Follower{followerCount !== 1 ? "s" : ""}
             </span>
           </button>
         </div>
+
+        {/* Follow List Modal */}
+        <FollowListModal
+          isOpen={showFollowList}
+          onClose={() => setShowFollowList(false)}
+          targetAddress={targetAddress}
+          displayName={profileName}
+          initialTab={followListTab}
+          onFollowCountChange={() => { clearRpcCache(); fetchProfile(); }}
+        />
       </div>
 
       {/* ── Wallet Management (own profile only) ── */}
