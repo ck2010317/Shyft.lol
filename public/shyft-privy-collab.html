@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 675px;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  }
+  .card {
+    width: 1200px;
+    height: 675px;
+    background: linear-gradient(135deg, #0A0B14 0%, #0F1225 25%, #111836 50%, #0D1B3E 75%, #0A0B14 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  /* Subtle grid pattern */
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(37, 99, 235, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(37, 99, 235, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+  /* Blue glow top-right */
+  .glow-1 {
+    position: absolute;
+    top: -120px;
+    right: -80px;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(37, 99, 235, 0.15) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  /* Blue glow bottom-left */
+  .glow-2 {
+    position: absolute;
+    bottom: -150px;
+    left: -100px;
+    width: 450px;
+    height: 450px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  /* Accent line */
+  .accent-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, #2563EB, #3B82F6, #2563EB, transparent);
+  }
+  .content {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 48px;
+  }
+  .logos {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+  }
+  .logo-box {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 20px 36px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    backdrop-filter: blur(20px);
+  }
+  .logo-box:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .shyft-logo-full {
+    height: 48px;
+    filter: brightness(0) invert(1);
+    /* Inverts the dark logo to white for dark background */
+  }
+  .privy-icon {
+    width: 52px;
+    height: 52px;
+    background: #FFFFFF;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .privy-icon-inner {
+    width: 20px;
+    height: 20px;
+    background: #0A0B14;
+    border-radius: 50%;
+    position: relative;
+    top: -4px;
+  }
+  .privy-icon-bar {
+    position: absolute;
+    bottom: 14px;
+    width: 30px;
+    height: 3px;
+    background: #0A0B14;
+    border-radius: 2px;
+  }
+  .privy-text {
+    font-size: 36px;
+    font-weight: 600;
+    color: #FFFFFF;
+    letter-spacing: -0.3px;
+  }
+  .x-mark {
+    font-size: 28px;
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.4);
+    margin: 0 4px;
+  }
+  .tagline {
+    text-align: center;
+    max-width: 700px;
+  }
+  .tagline-main {
+    font-size: 22px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    letter-spacing: -0.3px;
+    line-height: 1.4;
+  }
+  .tagline-sub {
+    font-size: 15px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 12px;
+    letter-spacing: 0.5px;
+  }
+  .badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    background: rgba(37, 99, 235, 0.12);
+    border: 1px solid rgba(37, 99, 235, 0.25);
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #60A5FA;
+    letter-spacing: 0.5px;
+  }
+  .badge-dot {
+    width: 6px;
+    height: 6px;
+    background: #3B82F6;
+    border-radius: 50%;
+  }
+  .url {
+    position: absolute;
+    bottom: 32px;
+    right: 40px;
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.25);
+    letter-spacing: 0.5px;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="glow-1"></div>
+  <div class="glow-2"></div>
+  <div class="accent-line"></div>
+  
+  <div class="content">
+    <div class="badge">
+      <div class="badge-dot"></div>
+      SEAMLESS WALLET AUTHENTICATION
+    </div>
+    
+    <div class="logos">
+      <div class="logo-box">
+        <img src="/shyft-logo-full.png" alt="Shyft" class="shyft-logo-full" />
+      </div>
+      
+      <span class="x-mark">×</span>
+      
+      <div class="logo-box">
+        <div class="privy-icon">
+          <div class="privy-icon-inner"></div>
+          <div class="privy-icon-bar"></div>
+        </div>
+        <span class="privy-text">privy</span>
+      </div>
+    </div>
+    
+    <div class="tagline">
+      <div class="tagline-main">On-chain social with zero-friction onboarding</div>
+      <div class="tagline-sub">Email • Social Login • Embedded Wallets • No seed phrases</div>
+    </div>
+  </div>
+  
+  <div class="url">shyft.lol</div>
+</div>
+</body>
+</html>
