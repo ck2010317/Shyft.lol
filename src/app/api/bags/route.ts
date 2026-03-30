@@ -207,7 +207,9 @@ export async function POST(req: NextRequest) {
         );
 
         const serialized = txs.map((tx: any) => ({
-          unsignedTxBase64: Buffer.from(tx.serialize()).toString("base64"),
+          unsignedTxBase64: Buffer.from(
+            tx.serialize({ requireAllSignatures: false, verifySignatures: false })
+          ).toString("base64"),
         }));
         return ok(serialized);
       }
