@@ -38,6 +38,51 @@ export default function TokenTrade({
   const [quoting, setQuoting] = useState(false);
   const [quote, setQuote] = useState<any>(null);
   const [error, setError] = useState("");
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
+  const [loadingBalance, setLoadingBalance] = useState(false);
+
+  // Fetch token balance when switching to sell mode
+  useEffect(() => {
+    if (mode !== "sell" || !publicKey) {
+      setTokenBalance(null);
+      return;
+    }
+    const fetchBalance = async () => {
+      setLoadingBalance(true);
+      try {
+        const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
+        const res = await fetch(rpcUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "getTokenAccountsByOwner",
+            params: [
+              publicKey.toBase58(),
+              { mint: tokenMint },
+              { encoding: "jsonParsed" },
+            ],
+          }),
+        });
+        const data = await res.json();
+        const accounts = data?.result?.value || [];
+        let total = 0;
+        for (const acct of accounts) {
+          const info = acct.account?.data?.parsed?.info;
+          if (info?.tokenAmount?.uiAmount) {
+            total += info.tokenAmount.uiAmount;
+          }
+        }
+        setTokenBalance(total);
+      } catch (e) {
+        console.error("Failed to fetch token balance:", e);
+        setTokenBalance(null);
+      }
+      setLoadingBalance(false);
+    };
+    fetchBalance();
+  }, [mode, publicKey, tokenMint]);
 
   // Get a quote when amount changes
   useEffect(() => {
@@ -188,6 +233,33 @@ export default function TokenTrade({
                 {val} SOL
               </button>
             ))}
+          </div>
+        )}
+        {mode === "sell" && (
+          <div className="mt-1.5 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-[#64748B]">Balance:</span>
+              <span className="text-[10px] font-semibold text-[#1A1A2E]">
+                {loadingBalance ? "Loading..." : tokenBalance !== null ? `${tokenBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${tokenSymbol}` : "--"}
+              </span>
+            </div>
+            <div className="flex gap-1.5">
+              {[25, 50, 75, 100].map((pct) => (
+                <button
+                  key={pct}
+                  onClick={() => {
+                    if (tokenBalance && tokenBalance > 0) {
+                      const val = (tokenBalance * pct) / 100;
+                      setAmount(pct === 100 ? Math.floor(val).toString() : Math.floor(val).toString());
+                    }
+                  }}
+                  disabled={!tokenBalance || tokenBalance <= 0}
+                  className="flex-1 py-1 text-[10px] font-medium bg-[#F1F5F9] rounded-lg text-[#64748B] hover:bg-[#FEF2F2] hover:text-[#DC2626] transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {pct}%
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
