@@ -53,7 +53,6 @@ interface OnChainPost {
   commentCount: string;
   createdAt: string;
   isPrivate: boolean;
-  isDelegated: boolean;
 }
 
 /* ───────── Helpers ───────── */
@@ -275,7 +274,7 @@ export default function Profile() {
         });
       }
       // fetch posts
-      const posts = await program.getAllPostsIncludingDelegated();
+      const posts = await program.getAllPosts();
       const mine = posts
         .filter((x) => x.author === targetAddress)
         .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));

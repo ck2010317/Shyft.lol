@@ -66,7 +66,7 @@ export function useNotifications() {
     try {
       // Fetch all data in parallel
       const [posts, comments, reactions, profiles, follows] = await Promise.all([
-        program.getAllPostsIncludingDelegated().catch(() => [] as any[]),
+        program.getAllPosts().catch(() => [] as any[]),
         program.getAllComments().catch(() => [] as any[]),
         program.getAllReactions().catch(() => [] as any[]),
         program.getAllProfiles().catch(() => [] as any[]),

@@ -149,7 +149,7 @@ export default function CreatorDashboard() {
     setLoading(true);
     try {
       const [posts, profileList, payments, comments, reactions] = await Promise.all([
-        program.getAllPostsIncludingDelegated(),
+        program.getAllPosts(),
         program.getAllProfiles(),
         program.getAllPaymentsForUser(),
         program.getAllComments(),
@@ -191,7 +191,6 @@ export default function CreatorDashboard() {
     const totalPosts = myPosts.length;
     const publicPosts = myPosts.filter((p) => !p.isPrivate);
     const privatePosts = myPosts.filter((p) => p.isPrivate);
-    const delegatedPosts = myPosts.filter((p) => p.isDelegated);
 
     // Likes
     const totalLikes = myPosts.reduce((sum, p) => sum + Number(p.likes || 0), 0);
@@ -286,7 +285,6 @@ export default function CreatorDashboard() {
     const typeBreakdown = [
       { name: "Public", value: publicPosts.length, color: "#2563EB" },
       { name: "Private", value: privatePosts.length, color: "#16A34A" },
-      { name: "TEE Delegated", value: delegatedPosts.length, color: "#7C3AED" },
     ].filter((t) => t.value > 0);
 
     // Posting streak (consecutive days with posts)
@@ -350,7 +348,6 @@ export default function CreatorDashboard() {
       totalPosts,
       publicPosts: publicPosts.length,
       privatePosts: privatePosts.length,
-      delegatedPosts: delegatedPosts.length,
       totalLikes,
       totalComments,
       totalReactions,
@@ -711,11 +708,7 @@ export default function CreatorDashboard() {
                           <Globe className="w-2.5 h-2.5" /> Public
                         </span>
                       )}
-                      {post.isDelegated && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#7C3AED] bg-[#F5F3FF] px-1.5 py-0.5 rounded-full ml-1">
-                          <Shield className="w-2.5 h-2.5" />
-                        </span>
-                      )}
+
                     </td>
                     <td className="py-3 pr-4 text-center">
                       <span className="text-sm font-medium text-[#1A1A2E]">{post.totalLikes}</span>

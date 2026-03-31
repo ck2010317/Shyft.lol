@@ -10,7 +10,7 @@ import {
 } from "@solana/web3.js";
 import { useAppStore } from "@/lib/store";
 
-export type PaymentStep = "idle" | "sending" | "confirming" | "recording" | "delegating" | "done" | "error";
+export type PaymentStep = "idle" | "sending" | "confirming" | "recording" | "finalizing" | "done" | "error";
 
 export function usePrivatePayment() {
   const { connection } = useConnection();

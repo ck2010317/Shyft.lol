@@ -205,11 +205,7 @@ function OnChainPostCard({
             <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-full">
               <Globe className="w-2.5 h-2.5" /> On-Chain
             </span>
-            {post.isDelegated && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#7C3AED] bg-[#F5F3FF] px-2 py-0.5 rounded-full">
-                <Shield className="w-2.5 h-2.5" /> TEE
-              </span>
-            )}
+
           </div>
         </div>
         </button>
@@ -510,7 +506,7 @@ export default function Feed() {
     clearRpcCache();
     try {
       const [allMapped, profiles, comments, reactions] = await Promise.all([
-        program.getAllPostsIncludingDelegated(),
+        program.getAllPosts(),
         program.getAllProfiles(),
         program.getAllComments(),
         program.getAllReactions(),
@@ -554,7 +550,7 @@ export default function Feed() {
     try {
       clearRpcCache();
       const [allMapped, comments, reactions] = await Promise.all([
-        program.getAllPostsIncludingDelegated(),
+        program.getAllPosts(),
         program.getAllComments(),
         program.getAllReactions(),
       ]);

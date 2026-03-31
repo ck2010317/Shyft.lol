@@ -11,8 +11,6 @@ import {
 } from "./encryption";
 
 const PROGRAM_ID = new PublicKey("EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ");
-// Keep DELEGATION_PROGRAM_ID to skip orphaned delegated accounts
-const DELEGATION_PROGRAM_ID = new PublicKey("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
 
 const PROFILE_SEED = Buffer.from("profile");
 const POST_SEED = Buffer.from("post");
@@ -167,14 +165,6 @@ function getConversationPda(user1: PublicKey, user2: PublicKey): [PublicKey, num
   );
 }
 
-/** Delegation record PDA — used only for detecting orphaned delegated accounts */
-function getDelegationRecordPda(pda: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("delegation"), pda.toBuffer()],
-    DELEGATION_PROGRAM_ID
-  );
-}
-
 export class ShyftClient {
   program: Program;
   provider: AnchorProvider;
@@ -265,16 +255,10 @@ export class ShyftClient {
     try {
       return await this.accounts.profile.fetch(profilePda);
     } catch (err: any) {
-      // Check if account exists but can't be deserialized (size mismatch or delegated)
+      // Check if account exists but can't be deserialized (size mismatch)
       try {
         const acctInfo = await this.provider.connection.getAccountInfo(profilePda);
         if (acctInfo && acctInfo.data.length > 0) {
-          // If account is delegated (orphaned), skip it — treat as no profile
-          // Delegated accounts are stale after a nuke/cleanup
-          if (acctInfo.owner.equals(DELEGATION_PROGRAM_ID)) {
-            console.log("🔗 Profile owned by delegation program — treating as no profile (stale delegation)");
-            return null;
-          }
           // If this is OUR profile, auto-migrate
           const wallet = this.provider.wallet.publicKey;
           if (wallet && owner.equals(wallet)) {
@@ -292,10 +276,9 @@ export class ShyftClient {
     }
   }
 
-  // updateProfilePrivacy is no longer used (was delegation-based)
-  // Kept as a stub in case we re-add visibility controls later
+  // updateProfilePrivacy — stub for future visibility controls
   async updateProfilePrivacy(_isPrivate: boolean): Promise<string> {
-    console.warn("updateProfilePrivacy is deprecated — delegation removed");
+    console.warn("updateProfilePrivacy is not yet implemented");
     return "deprecated";
   }
 
@@ -427,18 +410,14 @@ export class ShyftClient {
     }
   }
 
-  /** Fetch ALL posts — both regular (owned by our program) and delegated (owned by delegation program).
-   *  Delegated posts are decoded manually since Anchor's post.all() only returns our-program-owned accounts. */
-  async getAllPostsIncludingDelegated(): Promise<{ publicKey: string; author: string; postId: string; content: string; isPrivate: boolean; likes: string; commentCount: string; createdAt: string; isDelegated: boolean }[]> {
-    const cacheKey = "allPostsDelegated";
+  /** Fetch ALL posts from on-chain */
+  async getAllPosts(): Promise<{ publicKey: string; author: string; postId: string; content: string; isPrivate: boolean; likes: string; commentCount: string; createdAt: string }[]> {
+    const cacheKey = "allPosts";
     const cached = rpcCache.get<any[]>(cacheKey);
     if (cached) return cached;
 
-    const coder = new BorshCoder(idl as Idl);
-
-    // 1. Fetch regular (non-delegated) posts via Anchor (camelCase fields)
     const regularPosts = await this.accounts.post.all();
-    const mapped: any[] = regularPosts.map((p: any) => ({
+    const mapped = regularPosts.map((p: any) => ({
       publicKey: p.publicKey.toBase58(),
       author: p.account.author.toBase58(),
       postId: p.account.postId?.toString() || "0",
@@ -447,47 +426,10 @@ export class ShyftClient {
       likes: p.account.likes?.toString() || "0",
       commentCount: p.account.commentCount?.toString() || "0",
       createdAt: p.account.createdAt?.toString() || "0",
-      isDelegated: false,
     }));
 
-    // 2. Fetch delegated accounts (shared cache — used by messages too)
-    const delegatedAccounts = await this._getDelegatedAccounts();
-
-    for (const acc of delegatedAccounts) {
-      try {
-        // BorshCoder.accounts.decode uses capitalized name and returns snake_case fields
-        const decoded = coder.accounts.decode("Post", acc.account.data);
-        mapped.push({
-          publicKey: acc.pubkey.toBase58(),
-          author: decoded.author.toBase58(),
-          postId: decoded.post_id?.toString() || "0",
-          content: decoded.content || "",
-          isPrivate: decoded.is_private,
-          likes: decoded.likes?.toString() || "0",
-          commentCount: decoded.comment_count?.toString() || "0",
-          createdAt: decoded.created_at?.toString() || "0",
-          isDelegated: true,
-        });
-      } catch {
-        // Not a post account — skip (delegation program owns many account types)
-      }
-    }
-
-    // Deduplicate by publicKey (in case an account was just undelegated)
-    const seen = new Set<string>();
-    const unique = mapped.filter((p: any) => {
-      if (seen.has(p.publicKey)) return false;
-      seen.add(p.publicKey);
-      return true;
-    });
-
-    rpcCache.set(cacheKey, unique);
-    return unique;
-  }
-
-  /** Shared helper: fetch delegated accounts (disabled — orphaned accounts cleaned up) */
-  private async _getDelegatedAccounts(): Promise<readonly { pubkey: PublicKey; account: { data: Buffer } }[]> {
-    return [];
+    rpcCache.set(cacheKey, mapped);
+    return mapped;
   }
 
   async getAllProfiles(): Promise<any[]> {
@@ -496,7 +438,7 @@ export class ShyftClient {
     if (cached) return cached;
 
     try {
-      // Fetch non-delegated profiles from main chain
+      // Fetch all profiles
       let result: any[] = [];
       try {
         const allProfiles = await this.accounts.profile.all();
@@ -507,32 +449,6 @@ export class ShyftClient {
         }));
       } catch {
         console.warn("⚠️ getAllProfiles via Anchor failed, using raw fetch");
-      }
-
-      // Also check for delegated profiles (owned by delegation program)
-      try {
-        const delegatedAccounts = await this.provider.connection.getProgramAccounts(DELEGATION_PROGRAM_ID, {
-          filters: [{ dataSize: 315 }], // Profile account size (8 disc + 307 LEN)
-        });
-        const knownOwners = new Set(result.map(p => p.owner));
-        for (const acct of delegatedAccounts) {
-          try {
-            const decoded = this.program.coder.accounts.decode("profile", acct.account.data);
-            const ownerStr = decoded.owner.toBase58();
-            if (!knownOwners.has(ownerStr)) {
-              result.push({
-                publicKey: acct.pubkey.toBase58(),
-                ...decoded,
-                owner: ownerStr,
-              });
-              knownOwners.add(ownerStr);
-            }
-          } catch {
-            // Not a profile account — skip
-          }
-        }
-      } catch (erErr) {
-        console.warn("⚠️ Failed to fetch delegated profiles:", (erErr as any)?.message?.slice(0, 60));
       }
 
       rpcCache.set(cacheKey, result);
@@ -597,7 +513,7 @@ export class ShyftClient {
     const sig = await sponsorTransaction(signed, wallet.toBase58());
 
     rpcCache.invalidate("allComments");
-    rpcCache.invalidate("allPostsDelegated");
+    rpcCache.invalidate("allPosts");
     return sig;
   }
 
@@ -727,13 +643,6 @@ export class ShyftClient {
     const [messagePda] = getMessagePda(chatId, messageIndex);
     const [chatPda] = getChatPda(chatId);
 
-    // Safety check: if chat PDA was delegated from a previous session, bail out so caller can retry
-    const chatAccInfo = await this.provider.connection.getAccountInfo(chatPda);
-    if (chatAccInfo && chatAccInfo.owner.equals(DELEGATION_PROGRAM_ID)) {
-      console.warn("⚠️  Chat PDA is delegated — caller should create a fresh chat.");
-      throw new Error("Chat is delegated (stale). Create a new chat.");
-    }
-
     // Step 1: Send the message on-chain (treasury-sponsored)
     const treasury = await getTreasuryPubkey();
     const ix = await this.program.methods
@@ -779,9 +688,7 @@ export class ShyftClient {
     }
   }
 
-  /** Fetch all chats involving the current user.
-   *  Instead of scanning the entire delegation program (100K+ accounts),
-   *  we check each friend's expected chat PDA directly. */
+  /** Fetch all chats involving the current user. */
   async getAllChatsForUser(friendPubkeys: PublicKey[] = []): Promise<any[]> {
     const cacheKey = "allChatsForUser";
     const cached = rpcCache.get<any[]>(cacheKey);
@@ -801,42 +708,8 @@ export class ShyftClient {
         user2: c.account.user2?.toBase58() || "",
         messageCount: Number(c.account.messageCount || 0),
         createdAt: c.account.createdAt?.toString() || "0",
-        isDelegated: false,
       }))
       .filter((c: any) => c.user1 === userStr || c.user2 === userStr);
-
-    // 2. For each friend, check if their chat PDA exists as a delegated account
-    for (const friend of friendPubkeys) {
-      const chatId = deriveChatId(user, friend);
-      const [chatPda] = getChatPda(chatId);
-      const chatPdaStr = chatPda.toBase58();
-
-      // Skip if already found in regular chats
-      if (mapped.find(c => c.publicKey === chatPdaStr)) continue;
-
-      try {
-        const accInfo = await this.provider.connection.getAccountInfo(chatPda);
-        if (accInfo && accInfo.owner.equals(DELEGATION_PROGRAM_ID)) {
-          // This chat was delegated (orphaned) — decode it
-          try {
-            const decoded = coder.accounts.decode("Chat", accInfo.data);
-            mapped.push({
-              publicKey: chatPdaStr,
-              chatId: decoded.chat_id?.toString() || chatId.toString(),
-              user1: decoded.user1?.toBase58() || userStr,
-              user2: decoded.user2?.toBase58() || friend.toBase58(),
-              messageCount: Number(decoded.message_count || 0),
-              createdAt: decoded.created_at?.toString() || "0",
-              isDelegated: true,
-            });
-          } catch {
-            // Decode failed
-          }
-        }
-      } catch {
-        // Account doesn't exist
-      }
-    }
 
     // Deduplicate
     const seen = new Set<string>();
@@ -849,7 +722,7 @@ export class ShyftClient {
     return result;
   }
 
-  /** Fetch all messages for a specific chat (both regular and delegated). */
+  /** Fetch all messages for a specific chat. */
   async getMessagesForChat(chatId: number): Promise<any[]> {
     const cacheKey = `messages:${chatId}`;
     const cached = rpcCache.get<any[]>(cacheKey);
@@ -863,30 +736,6 @@ export class ShyftClient {
     const allMessages = await this._getAllMessages();
     const mapped: any[] = allMessages
       .filter((m: any) => m.chatId === chatIdStr);
-
-    // 2. Delegated messages — decode as Message and filter by chatId
-    const delegatedAccounts = await this._getDelegatedAccounts();
-    for (const acc of delegatedAccounts) {
-      try {
-        const decoded = coder.accounts.decode("Message", acc.account.data);
-        const msgChatId = decoded.chat_id?.toString() || "0";
-        if (msgChatId === chatIdStr) {
-          mapped.push({
-            publicKey: acc.pubkey.toBase58(),
-            chatId: msgChatId,
-            messageIndex: Number(decoded.message_index || 0),
-            sender: decoded.sender?.toBase58() || "",
-            content: decoded.content || "",
-            isPayment: decoded.is_payment || false,
-            paymentAmount: Number(decoded.payment_amount || 0),
-            timestamp: decoded.timestamp?.toString() || "0",
-            isDelegated: true,
-          });
-        }
-      } catch {
-        // Not a Message account (could be Post)
-      }
-    }
 
     // Deduplicate and sort by message index
     const seen = new Set<string>();
@@ -919,7 +768,6 @@ export class ShyftClient {
         isPayment: m.account.isPayment || false,
         paymentAmount: Number(m.account.paymentAmount || 0),
         timestamp: m.account.timestamp?.toString() || "0",
-        isDelegated: false,
       }));
       rpcCache.set(cacheKey, mapped);
       return mapped;
@@ -928,8 +776,7 @@ export class ShyftClient {
     }
   }
 
-  /** Fetch all payment messages across all chats involving the current user.
-   *  Uses cached message and delegated account data to minimize RPC calls. */
+  /** Fetch all payment messages across all chats involving the current user. */
   async getAllPaymentsForUser(): Promise<any[]> {
     const coder = new BorshCoder(idl as Idl);
     const user = this.provider.wallet.publicKey;
@@ -973,41 +820,7 @@ export class ShyftClient {
         isPrivate: true,
         timestamp: Number(m.timestamp || "0") * 1000,
         content: m.content || "",
-        isDelegated: false,
       });
-    }
-
-    // 3. Scan delegated messages for payment messages in user's chats
-    const delegatedAccounts = await this._getDelegatedAccounts();
-    for (const acc of delegatedAccounts) {
-      try {
-        const decoded = coder.accounts.decode("Message", acc.account.data);
-        const chatId = decoded.chat_id?.toString() || "0";
-        if (!userChatIds.has(chatId)) continue;
-        if (!decoded.is_payment) continue;
-
-        const pubkey = acc.pubkey.toBase58();
-        // Skip if already found in regular
-        if (payments.find(p => p.id === pubkey)) continue;
-
-        const sender = decoded.sender?.toBase58() || "";
-        const isSent = sender === userStr;
-
-        payments.push({
-          id: pubkey,
-          sender: isSent ? "me" : sender,
-          recipient: isSent ? (chatParticipant[chatId] || "") : "me",
-          amount: Number(decoded.payment_amount || 0) / 1_000_000,
-          token: "SOL",
-          status: "completed" as const,
-          isPrivate: true,
-          timestamp: Number(decoded.timestamp?.toString() || "0") * 1000,
-          content: decoded.content || "",
-          isDelegated: true,
-        });
-      } catch {
-        // Not a Message account
-      }
     }
 
     // Sort by timestamp descending (newest first)
@@ -1054,7 +867,7 @@ export class ShyftClient {
   }
 
   /**
-   * Send a message on-chain (simple version, no delegation).
+   * Send a message on-chain.
    * Used for key exchange messages and encrypted chat messages.
    */
   async sendMessageSimple(
@@ -1442,11 +1255,9 @@ export {
   getChatPda,
   getMessagePda,
   getFollowPda,
-  getDelegationRecordPda,
   getConversationPda,
   toLEBytes,
   PROGRAM_ID,
-  DELEGATION_PROGRAM_ID,
 };
 
 // Re-export encryption utilities for use in components

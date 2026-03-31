@@ -174,14 +174,14 @@ export default function Payments() {
                     {paymentStep === "sending" && "Sending SOL payment..."}
                     {paymentStep === "confirming" && "Confirming transaction..."}
                     {paymentStep === "recording" && "Recording payment on-chain..."}
-                    {paymentStep === "delegating" && "Finalizing..."}
+                    {paymentStep === "finalizing" && "Finalizing..."}
                   </span>
                 </div>
                 <div className="flex gap-1">
-                  <div className={`h-1.5 flex-1 rounded-full ${["sending", "confirming", "recording", "delegating"].includes(paymentStep) ? "bg-[#2563EB]" : "bg-[#E2E8F0]"}`} />
-                  <div className={`h-1.5 flex-1 rounded-full ${["confirming", "recording", "delegating"].includes(paymentStep) ? "bg-[#7C3AED]" : "bg-[#E2E8F0]"}`} />
-                  <div className={`h-1.5 flex-1 rounded-full ${["recording", "delegating"].includes(paymentStep) ? "bg-[#7C3AED]" : "bg-[#E2E8F0]"}`} />
-                  <div className={`h-1.5 flex-1 rounded-full ${paymentStep === "delegating" ? "bg-[#16A34A]" : "bg-[#E2E8F0]"}`} />
+                  <div className={`h-1.5 flex-1 rounded-full ${["sending", "confirming", "recording", "finalizing"].includes(paymentStep) ? "bg-[#2563EB]" : "bg-[#E2E8F0]"}`} />
+                  <div className={`h-1.5 flex-1 rounded-full ${["confirming", "recording", "finalizing"].includes(paymentStep) ? "bg-[#7C3AED]" : "bg-[#E2E8F0]"}`} />
+                  <div className={`h-1.5 flex-1 rounded-full ${["recording", "finalizing"].includes(paymentStep) ? "bg-[#7C3AED]" : "bg-[#E2E8F0]"}`} />
+                  <div className={`h-1.5 flex-1 rounded-full ${paymentStep === "finalizing" ? "bg-[#16A34A]" : "bg-[#E2E8F0]"}`} />
                 </div>
               </div>
             )}
@@ -223,9 +223,9 @@ export default function Payments() {
               disabled={!recipient || !amount || !["idle", "done", "error"].includes(paymentStep)}
               className="w-full py-3 bg-gradient-to-r from-[#2563EB] to-[#16A34A] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md"
             >
-              {["sending", "confirming", "recording", "delegating"].includes(paymentStep)
+              {["sending", "confirming", "recording", "finalizing"].includes(paymentStep)
                 ? paymentStep === "recording" ? "Recording on-chain..."
-                  : paymentStep === "delegating" ? "Finalizing..."
+                  : paymentStep === "finalizing" ? "Finalizing..."
                   : "Processing..."
                 : "Send Payment"}
             </button>
