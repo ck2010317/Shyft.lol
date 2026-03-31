@@ -86,6 +86,9 @@ export default function Landing() {
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
+          <a href="/docs" className="hidden sm:flex items-center gap-1 text-xs text-[#64748B] hover:text-[#2563EB] transition-colors">
+            <Zap className="w-3 h-3" /> Docs
+          </a>
           <a href="https://explorer.solana.com/address/EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ?cluster=devnet" target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-1 text-xs text-[#64748B] hover:text-[#2563EB] transition-colors">
             <Zap className="w-3 h-3" /> On-Chain Program
           </a>
@@ -406,6 +409,7 @@ export default function Landing() {
             <span className="text-xs font-semibold text-[#64748B]">Shyft</span>
           </div>
           <div className="flex items-center gap-4">
+            <a href="/docs" className="text-[#94A3B8] hover:text-[#1A1A2E] transition-colors text-xs font-medium">Docs</a>
             <a href="https://x.com/Shyft_lol" target="_blank" rel="noopener noreferrer" className="text-[#94A3B8] hover:text-[#1A1A2E] transition-colors">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
             </a>
