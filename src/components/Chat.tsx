@@ -338,30 +338,38 @@ export default function Chat() {
       // ===== STEP 1: Ensure our encryption key is published FIRST =====
       // This is the ONLY place key publishing happens (not in loadMessages) to prevent index races
       const myAddr = publicKey.toBase58();
+      console.log(`📤 handleSend: chatId=${chatInfo.chatId}, exists=${chatInfo.exists}, myAddr=${myAddr.slice(0,8)}...`);
+      console.log(`📤 handleSend: keyPublishedChats has chatId? ${keyPublishedChats.current.has(chatInfo.chatId)}`);
+      
       if (chatInfo.exists && !keyPublishedChats.current.has(chatInfo.chatId)) {
         try {
           const hasMyKey = await program.findMyEncryptionKey(chatInfo.chatId, myAddr);
+          console.log(`📤 handleSend: findMyEncryptionKey result: ${hasMyKey}`);
           if (!hasMyKey) {
             console.log("🔑 handleSend: Publishing our encryption key before sending...");
             const keyMsgIndex = await program.getNextMessageIndex(chatInfo.chatId);
+            console.log(`🔑 handleSend: Next available index for PUBKEY: ${keyMsgIndex}`);
             await program.publishEncryptionKey(chatInfo.chatId, keyMsgIndex, encryptionKeys.publicKey);
             console.log("✅ handleSend: Encryption key published at index", keyMsgIndex);
             keyPublishedChats.current.add(chatInfo.chatId);
           } else {
+            console.log("✅ handleSend: Our key already on-chain");
             keyPublishedChats.current.add(chatInfo.chatId);
           }
         } catch (keyErr) {
-          console.warn("handleSend: Key publish failed:", keyErr);
+          console.error("❌ handleSend: Key publish failed:", keyErr);
           // Continue anyway — message can still be sent as plaintext
         }
       }
 
       // ===== STEP 2: Fresh peer key lookup AFTER our key is published =====
       let peerKey = await program.findPeerEncryptionKey(chatInfo.chatId, myAddr);
+      console.log(`📤 handleSend: peer key found? ${peerKey ? "YES" : "NO"}`);
       setPeerPubKey(peerKey);
 
       // ===== STEP 3: Get message index AFTER key publish (so we don't collide) =====
       const msgIndex = await program.getNextMessageIndex(chatInfo.chatId);
+      console.log(`📤 handleSend: sending message at index ${msgIndex}, encrypted=${!!peerKey}`);
 
       const localMsg: DecryptedMsg = {
         publicKey: "pending",
