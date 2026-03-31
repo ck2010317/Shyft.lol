@@ -97,9 +97,8 @@ export default function TokenTrade({
       try {
         const inputMint = mode === "buy" ? SOL_MINT : tokenMint;
         const outputMint = mode === "buy" ? tokenMint : SOL_MINT;
-        const amountSmallest = mode === "buy"
-          ? Math.floor(Number(amount) * 1e9)
-          : Math.floor(Number(amount) * 1e6);
+        // Bags tokens use 9 decimals (same as SOL)
+        const amountSmallest = Math.floor(Number(amount) * 1e9);
 
         const res = await fetch("/api/bags", {
           method: "POST",
@@ -278,7 +277,7 @@ export default function TokenTrade({
             <span className="text-[#64748B]">You {mode === "buy" ? "receive" : "get back"}</span>
             <span className="font-medium text-[#1A1A2E]">
               {mode === "buy"
-                ? `${(Number(quote.outAmount) / 1e6).toFixed(2)} ${tokenSymbol}`
+                ? `${(Number(quote.outAmount) / 1e9).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${tokenSymbol}`
                 : `${formatSOL(quote.outAmount)} SOL`}
             </span>
           </div>
@@ -292,7 +291,7 @@ export default function TokenTrade({
             <span className="text-[#64748B]">Min. received</span>
             <span className="text-[#475569]">
               {mode === "buy"
-                ? `${(Number(quote.minOutAmount) / 1e6).toFixed(2)} ${tokenSymbol}`
+                ? `${(Number(quote.minOutAmount) / 1e9).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${tokenSymbol}`
                 : `${formatSOL(quote.minOutAmount)} SOL`}
             </span>
           </div>
