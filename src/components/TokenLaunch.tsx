@@ -131,6 +131,8 @@ export default function TokenLaunch({ onClose, onSuccess, username }: TokenLaunc
       }
 
       // Create launch transaction (now config exists on-chain)
+      // IMPORTANT: Use the Shyft partner config key (BAGS_CONFIG_KEY) for the launch,
+      // NOT the per-token fee-share config. The partner key routes platform fees to Shyft.
       const launchRes = await fetch("/api/bags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -139,7 +141,6 @@ export default function TokenLaunch({ onClose, onSuccess, username }: TokenLaunc
           metadataUrl, tokenMint,
           launchWallet: publicKey.toBase58(),
           initialBuyLamports: Math.floor(Number(initialBuy) * 1e9),
-          configKey: configData.response.configKey,
         }),
       });
       const launchData = await launchRes.json();
