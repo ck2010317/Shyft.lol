@@ -143,16 +143,37 @@ export async function GET(req: NextRequest) {
           console.warn("[user-tokens] feed fetch failed:", e);
         }
 
-        // 4) For any mints that are still bare (not in feed), try to get info individually
+        // 4) For any mints that are still bare (not in feed), enrich via Helius DAS API
+        const heliusUrl = `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
         const results = Array.from(tokenMap.values());
         const enriched = await Promise.all(
           results.map(async (token) => {
             if (token.name) return token; // Already has feed data
             try {
-              const info = await sdk.bagsApiClient.get(`/token-launch/info?tokenMint=${token.tokenMint}`);
-              return { ...token, ...(info && typeof info === 'object' ? info as Record<string, unknown> : {}) };
+              const dasRes = await fetch(heliusUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  jsonrpc: "2.0",
+                  id: 1,
+                  method: "getAsset",
+                  params: { id: token.tokenMint },
+                }),
+              });
+              const dasData = await dasRes.json();
+              const content = dasData?.result?.content || {};
+              const metadata = content?.metadata || {};
+              const image = content?.links?.image || content?.files?.[0]?.uri || "";
+              return {
+                ...token,
+                name: metadata.name || token.tokenMint.slice(0, 8),
+                symbol: metadata.symbol || "",
+                description: metadata.description || "",
+                image,
+                status: "PRE_GRAD",
+              };
             } catch {
-              return token; // Return bare mint if info lookup fails
+              return token; // Return bare mint if DAS lookup fails
             }
           })
         );
