@@ -27,6 +27,7 @@ const ALLOWED_PROGRAMS = new Set([
   "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",  // SPL Memo Program (Phantom, Jupiter, etc.)
   "Ed25519SigVerify111111111111111111111111111",     // Ed25519 precompile (signature verification)
   "KeccakSecp256k11111111111111111111111111111",     // Secp256k1 precompile
+  "L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95",   // Privy wallet infrastructure (session keys / smart wallet)
 ]);
 
 function getTreasuryKeypair(): Keypair {
