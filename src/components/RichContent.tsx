@@ -15,15 +15,15 @@ const URL_REGEX = /https?:\/\/[^\s<]+[^\s<.,;:!?"')\]]/gi;
 /* ── Image extensions ── */
 const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp|svg|bmp|avif)(\?.*)?$/i;
 
+/* ── Video extensions ── */
+const VIDEO_EXTS = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
+
 /* ── IPFS URLs (Pinata, etc.) ── */
-const IPFS_URL = /\.mypinata\.cloud\/ipfs\/|ipfs\.io\/ipfs\/|cloudflare-ipfs\.com\/ipfs\//i;
+const IPFS_URL = /\.mypinata\.cloud\/ipfs\/|ipfs\.io\/ipfs\/|cloudflare-ipfs\.com\/ipfs\/|gateway\.pinata\.cloud\/ipfs\//i;
 /** IPFS URLs that are NOT videos — treat as images */
 const IPFS_IMAGE_URL = { test: (u: string) => IPFS_URL.test(u) && !VIDEO_EXTS.test(u) };
 /** IPFS URLs that ARE videos */
 const IPFS_VIDEO_URL = { test: (u: string) => IPFS_URL.test(u) && VIDEO_EXTS.test(u) };
-
-/* ── Video extensions ── */
-const VIDEO_EXTS = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
 
 /* ── YouTube regex ── */
 const YOUTUBE_REGEX = /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
