@@ -87,7 +87,7 @@ export default function Landing() {
           <a href="/docs" className="hidden sm:flex items-center gap-1 text-xs text-[#64748B] hover:text-[#2563EB] transition-colors">
             <Zap className="w-3 h-3" /> Docs
           </a>
-          <a href="https://explorer.solana.com/address/EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ?cluster=devnet" target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-1 text-xs text-[#64748B] hover:text-[#2563EB] transition-colors">
+          <a href="https://explorer.solana.com/address/EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ" target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-1 text-xs text-[#64748B] hover:text-[#2563EB] transition-colors">
             <Zap className="w-3 h-3" /> On-Chain Program
           </a>
           <button
@@ -418,7 +418,7 @@ export default function Landing() {
           <Wallet className="w-4 h-4" /> Get Started — It&apos;s Free
         </button>
         <p className="text-[10px] text-[#94A3B8] mt-4">
-          Program: EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ · Devnet
+          Program: EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ · Mainnet
         </p>
       </div>
 

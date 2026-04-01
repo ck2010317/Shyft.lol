@@ -140,7 +140,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Which network does Shyft use?",
-    a: "The social protocol (posts, chat, profiles) runs on Solana Devnet. Creator Tokens trade on Solana Mainnet via the Bags protocol.",
+    a: "Everything runs on Solana Mainnet. Posts, profiles, chat, and Creator Tokens are all fully on mainnet.",
   },
   {
     q: "Can I use my own Solana wallet?",
@@ -197,7 +197,7 @@ export default function DocsPage() {
           </Link>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
-          <a href={`https://explorer.solana.com/address/${PROGRAM_ID}?cluster=devnet`} target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-1.5 text-xs text-[#64748B] hover:text-[#2563EB] transition-colors">
+          <a href={`https://explorer.solana.com/address/${PROGRAM_ID}`} target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-1.5 text-xs text-[#64748B] hover:text-[#2563EB] transition-colors">
             <Globe className="w-3.5 h-3.5" /> Explorer
           </a>
           <a href="https://github.com/chandm1213/Shyft.lol" target="_blank" rel="noopener noreferrer" className="hidden sm:flex items-center gap-1.5 text-xs text-[#64748B] hover:text-[#2563EB] transition-colors">
@@ -311,7 +311,7 @@ Shyft Client Layer
 Treasury Sponsorship        Bags SDK (Mainnet)
   Gasless signing              Token launch, trade, earnings
     ↓                           ↓
-Solana Devnet               Solana Mainnet
+Solana Mainnet              Solana Mainnet
   Anchor Program               Bags Protocol`} />
 
           <div className="overflow-x-auto my-6">
@@ -322,7 +322,7 @@ Solana Devnet               Solana Mainnet
               <tbody>
                 <TableRow cells={["Frontend", "Next.js 16, React 19, Tailwind CSS 4, Zustand"]} />
                 <TableRow cells={["Authentication", "Privy — Twitter OAuth, Email, Google, Embedded Wallets"]} />
-                <TableRow cells={["On-Chain Program", "Rust / Anchor 0.30, deployed on Solana Devnet"]} />
+                <TableRow cells={["On-Chain Program", "Rust / Anchor 0.30, deployed on Solana Mainnet"]} />
                 <TableRow cells={["Encryption", "NaCl Box via tweetnacl — X25519 + XSalsa20-Poly1305"]} />
                 <TableRow cells={["Creator Tokens", "@bagsfm/bags-sdk on Solana Mainnet"]} />
                 <TableRow cells={["RPC Provider", "Helius"]} />
@@ -406,8 +406,8 @@ Solana Devnet               Solana Mainnet
 
           <InfoCard title="Program ID" accent="blue">
             <code className="bg-white px-2 py-1 rounded text-[12px] font-mono text-[#2563EB] border border-[#E2E8F0]">{PROGRAM_ID}</code>
-            <span className="ml-2 text-[11px] text-[#94A3B8]">— Solana Devnet</span>
-            <a href={`https://explorer.solana.com/address/${PROGRAM_ID}?cluster=devnet`} target="_blank" rel="noopener noreferrer" className="ml-2 inline-flex items-center gap-1 text-[11px] text-[#2563EB] hover:underline">
+            <span className="ml-2 text-[11px] text-[#94A3B8]">— Solana Mainnet</span>
+            <a href={`https://explorer.solana.com/address/${PROGRAM_ID}`} target="_blank" rel="noopener noreferrer" className="ml-2 inline-flex items-center gap-1 text-[11px] text-[#2563EB] hover:underline">
               View on Explorer <ExternalLink className="w-2.5 h-2.5" />
             </a>
           </InfoCard>
@@ -537,7 +537,7 @@ Solana Devnet               Solana Mainnet
                 <TableRow header cells={["Category", "Technology"]} />
               </thead>
               <tbody>
-                <TableRow cells={["Blockchain", "Solana (Devnet for social, Mainnet for tokens)"]} />
+                <TableRow cells={["Blockchain", "Solana Mainnet"]} />
                 <TableRow cells={["Smart Contracts", "Rust, Anchor Framework 0.30"]} />
                 <TableRow cells={["Frontend", "Next.js 16, React 19, TypeScript, Tailwind CSS 4"]} />
                 <TableRow cells={["Authentication", "Privy (Twitter OAuth, Email, Google, Embedded Wallets)"]} />
@@ -579,7 +579,7 @@ Solana Devnet               Solana Mainnet
               </div>
             </div>
             <p className="text-[10px] text-[#94A3B8] text-center mt-6">
-              Program: {PROGRAM_ID} · Solana Devnet · © {new Date().getFullYear()} Shyft
+              Program: {PROGRAM_ID} · Solana Mainnet · © {new Date().getFullYear()} Shyft
             </p>
           </div>
         </main>
