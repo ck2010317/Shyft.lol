@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Heart, MessageCircle, Share2, Repeat2, Globe, Send, Shield, RefreshCw, Image as ImageIcon, X, BadgeCheck } from "lucide-react";
+import { Heart, MessageCircle, Share2, Repeat2, Globe, Send, Shield, RefreshCw, Image as ImageIcon, X, BadgeCheck, Trash2 } from "lucide-react";
 
 // Gold badge for OG / founder accounts
 const GOLD_BADGE_USERNAMES = ["shaan"];
@@ -48,6 +48,7 @@ function OnChainPostCard({
   onCommentAdded,
   onReactionAdded,
   onRepost,
+  onDelete,
 }: {
   post: any;
   profile: any;
@@ -59,6 +60,7 @@ function OnChainPostCard({
   onCommentAdded: () => void;
   onReactionAdded: () => void;
   onRepost: (content: string) => void;
+  onDelete: () => void;
 }) {
   const { likedPosts, addLikedPost, isConnected, currentUser, navigateToProfile } = useAppStore();
   const { publicKey: walletKey } = useWallet();
@@ -70,6 +72,7 @@ function OnChainPostCard({
   const [reacting, setReacting] = useState(false);
   const [localLikeBoost, setLocalLikeBoost] = useState(0);
   const [reposting, setReposting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const hasLiked = likedPosts.includes(post.publicKey);
   const postComments = allComments.filter((c) => c.post === post.publicKey)
@@ -399,6 +402,40 @@ function OnChainPostCard({
         >
           <Share2 className="w-4 h-4" />
         </button>
+
+        {/* Delete (own posts only) */}
+        {isMe && (
+          <button
+            disabled={deleting}
+            onClick={async () => {
+              if (deleting || !program || !walletKey) return;
+              if (!confirm("Delete this post? This is permanent and on-chain.")) return;
+              setDeleting(true);
+              try {
+                const postId = Number(post.postId);
+                await program.deletePost(postId);
+                toast("success", "Post deleted 🗑️", "Removed from chain, rent refunded");
+                onDelete();
+              } catch (err: any) {
+                console.error("Delete error:", err);
+                if (err?.message?.includes("User rejected") || err?.message?.includes("rejected the request")) {
+                  toast("error", "Delete cancelled", "You rejected the transaction");
+                } else {
+                  toast("error", "Delete failed", err?.message?.slice(0, 80) || "Please try again");
+                }
+              }
+              setDeleting(false);
+            }}
+            className={`touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium transition-all ${
+              deleting
+                ? "text-red-400 bg-red-50 opacity-60"
+                : "text-[#94A3B8] hover:text-red-500 hover:bg-red-50 active:bg-red-50"
+            } disabled:cursor-not-allowed`}
+          >
+            <Trash2 className={`w-4 h-4 ${deleting ? "animate-pulse" : ""}`} />
+          </button>
+        )}
+
         <a
           href={`https://explorer.solana.com/address/${post.publicKey}?cluster=devnet`}
           target="_blank"
@@ -762,6 +799,9 @@ export default function Feed() {
                   } catch (err: any) {
                     toast("error", "Repost failed", err?.message?.slice(0, 80) || "Try again");
                   }
+                }}
+                onDelete={() => {
+                  setTimeout(() => fetchOnchainPosts(), 1500);
                 }}
               />
             );

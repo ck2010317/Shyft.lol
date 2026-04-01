@@ -376,6 +376,43 @@ export class ShyftClient {
     }
   }
 
+  async deletePost(postId: number): Promise<string> {
+    const wallet = this.provider.wallet.publicKey;
+    if (!wallet) throw new Error("Wallet not connected");
+
+    console.log("=== Deleting Post ===");
+    console.log("Author:", wallet.toBase58());
+    console.log("Post ID:", postId);
+
+    try {
+      const treasury = await getTreasuryPubkey();
+      const [profilePda] = getProfilePda(wallet);
+      const [postPda] = getPostPda(wallet, postId);
+
+      const ix = await this.program.methods
+        .closePost(new BN(postId))
+        .accountsPartial({
+          post: postPda,
+          profile: profilePda,
+          user: wallet,
+        })
+        .instruction();
+
+      const tx = new Transaction().add(ix);
+      tx.feePayer = treasury;
+      tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
+      const signed = await this.provider.wallet.signTransaction(tx);
+      const sig = await sponsorTransaction(signed, wallet.toBase58());
+
+      console.log("Post deleted (treasury sponsored):", sig);
+      rpcCache.invalidate("allPosts");
+      return sig;
+    } catch (err: any) {
+      console.error("Delete post error:", err);
+      throw err;
+    }
+  }
+
   async getAllPublicPosts(): Promise<any[]> {
     try {
       const allPosts = await this.accounts.post.all();
