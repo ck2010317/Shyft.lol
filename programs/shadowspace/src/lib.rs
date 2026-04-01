@@ -789,7 +789,7 @@ pub struct FollowUser<'info> {
 pub struct UnfollowUser<'info> {
     #[account(
         mut,
-        close = user,
+        close = treasury,
         seeds = [FOLLOW_SEED, follower_profile.owner.as_ref(), following_profile.owner.as_ref()],
         bump
     )]
@@ -800,67 +800,95 @@ pub struct UnfollowUser<'info> {
     pub following_profile: Account<'info, Profile>,
     #[account(mut)]
     pub user: Signer<'info>,
+    /// Treasury wallet — rent refund destination
+    /// CHECK: This is the treasury wallet that originally paid rent
+    #[account(mut)]
+    pub treasury: AccountInfo<'info>,
 }
 
 // ========== CLOSE ACCOUNT CONTEXTS ==========
 
 #[derive(Accounts)]
 pub struct CloseProfile<'info> {
-    #[account(mut, close = user, seeds = [PROFILE_SEED, user.key().as_ref()], bump)]
+    #[account(mut, close = treasury, seeds = [PROFILE_SEED, user.key().as_ref()], bump)]
     pub profile: Account<'info, Profile>,
     #[account(mut)]
     pub user: Signer<'info>,
+    /// Treasury wallet — rent refund destination
+    /// CHECK: This is the treasury wallet that originally paid rent
+    #[account(mut)]
+    pub treasury: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
 #[instruction(post_id: u64)]
 pub struct ClosePost<'info> {
-    #[account(mut, close = user, seeds = [POST_SEED, user.key().as_ref(), &post_id.to_le_bytes()], bump)]
+    #[account(mut, close = treasury, seeds = [POST_SEED, user.key().as_ref(), &post_id.to_le_bytes()], bump)]
     pub post: Account<'info, Post>,
     #[account(mut, seeds = [PROFILE_SEED, user.key().as_ref()], bump)]
     pub profile: Account<'info, Profile>,
     #[account(mut)]
     pub user: Signer<'info>,
+    /// Treasury wallet — rent refund destination
+    /// CHECK: This is the treasury wallet that originally paid rent
+    #[account(mut)]
+    pub treasury: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
 #[instruction(post_id: u64, comment_index: u64)]
 pub struct CloseComment<'info> {
-    #[account(mut, close = user, seeds = [COMMENT_SEED, post.key().as_ref(), &comment_index.to_le_bytes()], bump)]
+    #[account(mut, close = treasury, seeds = [COMMENT_SEED, post.key().as_ref(), &comment_index.to_le_bytes()], bump)]
     pub comment: Account<'info, Comment>,
     #[account(mut, seeds = [POST_SEED, post.author.as_ref(), &post_id.to_le_bytes()], bump)]
     pub post: Account<'info, Post>,
     #[account(mut, constraint = user.key() == comment.author @ ShadowError::Unauthorized)]
     pub user: Signer<'info>,
+    /// Treasury wallet — rent refund destination
+    /// CHECK: This is the treasury wallet that originally paid rent
+    #[account(mut)]
+    pub treasury: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
 #[instruction(post_id: u64)]
 pub struct CloseReaction<'info> {
-    #[account(mut, close = user, seeds = [REACTION_SEED, post.key().as_ref(), user.key().as_ref()], bump)]
+    #[account(mut, close = treasury, seeds = [REACTION_SEED, post.key().as_ref(), user.key().as_ref()], bump)]
     pub reaction: Account<'info, Reaction>,
     #[account(seeds = [POST_SEED, post.author.as_ref(), &post_id.to_le_bytes()], bump)]
     pub post: Account<'info, Post>,
     #[account(mut)]
     pub user: Signer<'info>,
+    /// Treasury wallet — rent refund destination
+    /// CHECK: This is the treasury wallet that originally paid rent
+    #[account(mut)]
+    pub treasury: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
 #[instruction(chat_id: u64)]
 pub struct CloseChat<'info> {
-    #[account(mut, close = user, seeds = [CHAT_SEED, &chat_id.to_le_bytes()], bump)]
+    #[account(mut, close = treasury, seeds = [CHAT_SEED, &chat_id.to_le_bytes()], bump)]
     pub chat: Account<'info, Chat>,
     #[account(mut, constraint = user.key() == chat.user1 @ ShadowError::Unauthorized)]
     pub user: Signer<'info>,
+    /// Treasury wallet — rent refund destination
+    /// CHECK: This is the treasury wallet that originally paid rent
+    #[account(mut)]
+    pub treasury: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
 #[instruction(chat_id: u64, message_index: u64)]
 pub struct CloseMessage<'info> {
-    #[account(mut, close = user, seeds = [MESSAGE_SEED, &chat_id.to_le_bytes(), &message_index.to_le_bytes()], bump)]
+    #[account(mut, close = treasury, seeds = [MESSAGE_SEED, &chat_id.to_le_bytes(), &message_index.to_le_bytes()], bump)]
     pub message: Account<'info, Message>,
     #[account(mut, constraint = user.key() == message.sender @ ShadowError::Unauthorized)]
     pub user: Signer<'info>,
+    /// Treasury wallet — rent refund destination
+    /// CHECK: This is the treasury wallet that originally paid rent
+    #[account(mut)]
+    pub treasury: AccountInfo<'info>,
 }
 
 // ========== ADMIN FORCE CLOSE ==========

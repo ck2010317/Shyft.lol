@@ -118,6 +118,13 @@ export type Shadowspace = {
           "name": "user",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury wallet — rent refund destination"
+          ],
+          "writable": true
         }
       ],
       "args": [
@@ -201,6 +208,13 @@ export type Shadowspace = {
           "name": "user",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury wallet — rent refund destination"
+          ],
+          "writable": true
         }
       ],
       "args": [
@@ -379,6 +393,13 @@ export type Shadowspace = {
           "name": "user",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury wallet — rent refund destination"
+          ],
+          "writable": true
         }
       ],
       "args": [
@@ -461,6 +482,13 @@ export type Shadowspace = {
           "name": "user",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury wallet — rent refund destination"
+          ],
+          "writable": true
         }
       ],
       "args": [
@@ -514,6 +542,13 @@ export type Shadowspace = {
           "name": "user",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury wallet — rent refund destination"
+          ],
+          "writable": true
         }
       ],
       "args": []
@@ -592,6 +627,13 @@ export type Shadowspace = {
           "name": "user",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury wallet — rent refund destination"
+          ],
+          "writable": true
         }
       ],
       "args": [
@@ -2392,6 +2434,13 @@ export type Shadowspace = {
           "name": "user",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "Treasury wallet — rent refund destination"
+          ],
+          "writable": true
         }
       ],
       "args": []
