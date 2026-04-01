@@ -561,6 +561,35 @@ export class ShyftClient {
     return sig;
   }
 
+  async deleteComment(postAuthor: PublicKey, postId: number, commentIndex: number): Promise<string> {
+    const wallet = this.provider.wallet.publicKey;
+    if (!wallet) throw new Error("Wallet not connected");
+
+    const treasury = await getTreasuryPubkey();
+    const [postPda] = getPostPda(postAuthor, postId);
+    const [commentPda] = getCommentPda(postPda, commentIndex);
+
+    const ix = await this.program.methods
+      .closeComment(new BN(postId), new BN(commentIndex))
+      .accountsPartial({
+        comment: commentPda,
+        post: postPda,
+        user: wallet,
+      })
+      .instruction();
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = treasury;
+    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
+    const signed = await this.provider.wallet.signTransaction(tx);
+    const sig = await sponsorTransaction(signed, wallet.toBase58());
+
+    console.log("Comment deleted (treasury sponsored):", sig);
+    rpcCache.invalidate("allComments");
+    rpcCache.invalidate("allPosts");
+    return sig;
+  }
+
   async getAllComments(): Promise<{ publicKey: string; post: string; author: string; commentIndex: string; content: string; createdAt: string }[]> {
     const cacheKey = "allComments";
     const cached = rpcCache.get<any[]>(cacheKey);

@@ -480,6 +480,30 @@ function OnChainPostCard({
                     <span className="inline-flex items-center gap-0.5 text-[8px] font-medium text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.5 rounded-full">
                       <Globe className="w-2 h-2" /> on-chain
                     </span>
+                    {isMyComment && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!program || !walletKey) return;
+                          if (!confirm("Delete this comment?")) return;
+                          try {
+                            const postAuthor = new PublicKey(post.author);
+                            const postId = Number(post.postId);
+                            const commentIdx = Number(comment.commentIndex);
+                            await program.deleteComment(postAuthor, postId, commentIdx);
+                            toast("success", "Comment deleted 🗑️", "Removed from chain");
+                            onCommentAdded();
+                          } catch (err: any) {
+                            console.error("Delete comment error:", err);
+                            toast("error", "Delete failed", err?.message?.slice(0, 80) || "Try again");
+                          }
+                        }}
+                        className="ml-auto text-[#CBD5E1] hover:text-red-500 transition-colors"
+                        title="Delete comment"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
                   <p className="text-xs text-[#475569] mt-0.5">{comment.content}</p>
                 </div>
