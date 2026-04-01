@@ -88,7 +88,7 @@ export default function ProfileSetup({ onComplete }: ProfileSetupProps) {
       const sig = await program.createProfile(
         username.trim(),
         displayName.trim(),
-        bio.trim() || "Building on Shyft",
+        bio.trim() || "gm ☀️",
         inviteCode || undefined
       );
       toast("success", "Profile created on Solana!", `TX: ${sig.slice(0, 8)}...`);
@@ -98,7 +98,7 @@ export default function ProfileSetup({ onComplete }: ProfileSetupProps) {
         username: username.trim(),
         displayName: displayName.trim(),
         avatar: "🧑‍💻",
-        bio: bio.trim() || "Building on Shyft",
+        bio: bio.trim() || "gm ☀️",
         isPrivate: false,
         followerCount: 0,
         followingCount: 0,
@@ -121,7 +121,7 @@ export default function ProfileSetup({ onComplete }: ProfileSetupProps) {
       username: addr.slice(0, 8),
       displayName: addr.slice(0, 4) + "..." + addr.slice(-4),
       avatar: "🧑‍💻",
-      bio: "New to Shyft",
+      bio: "gm ☀️",
       isPrivate: false,
       followerCount: 0,
       followingCount: 0,
