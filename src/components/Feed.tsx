@@ -152,7 +152,7 @@ function OnChainPostCard({
   };
 
   const handleReaction = async (reactionType: number) => {
-    if (!program || !isConnected || reacting || myReactionType !== null) return;
+    if (!program || !isConnected || reacting) return;
     setReacting(true);
     try {
       const authorPubkey = new PublicKey(post.author);
@@ -169,6 +169,26 @@ function OnChainPostCard({
         toast("error", "Insufficient SOL", "Your wallet needs more SOL to react.");
       } else {
         toast("error", "Reaction failed", err?.message?.slice(0, 80) || "Please try again");
+      }
+    }
+    setReacting(false);
+  };
+
+  const handleRemoveReaction = async () => {
+    if (!program || !isConnected || reacting || myReactionType === null) return;
+    setReacting(true);
+    try {
+      const authorPubkey = new PublicKey(post.author);
+      const postId = Number(post.postId);
+      await program.removeReaction(authorPubkey, postId);
+      toast("success", "Reaction removed", "Your reaction has been undone");
+      onReactionAdded();
+    } catch (err: any) {
+      console.error("Remove reaction error:", err);
+      if (err?.message?.includes("User rejected") || err?.message?.includes("rejected the request")) {
+        toast("error", "Cancelled", "You rejected the transaction");
+      } else {
+        toast("error", "Failed to remove reaction", err?.message?.slice(0, 80) || "Please try again");
       }
     }
     setReacting(false);
@@ -324,15 +344,16 @@ function OnChainPostCard({
         {/* Reaction button */}
         <div className="relative">
           <button
-            onClick={() => setShowReactions(!showReactions)}
-            disabled={!isConnected || myReactionType !== null}
+            onClick={() => myReactionType !== null ? handleRemoveReaction() : setShowReactions(!showReactions)}
+            disabled={!isConnected || reacting}
             className={`touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium transition-all ${
               myReactionType !== null
-                ? `${REACTIONS[myReactionType]?.text || "text-[#94A3B8]"} ${REACTIONS[myReactionType]?.bg || "bg-[#F1F5F9]"}`
+                ? `${REACTIONS[myReactionType]?.text || "text-[#94A3B8]"} ${REACTIONS[myReactionType]?.bg || "bg-[#F1F5F9]"} hover:opacity-70`
                 : showReactions
                   ? "text-[#EA580C] bg-orange-50"
                   : "text-[#94A3B8] hover:text-[#EA580C] hover:bg-orange-50 active:bg-orange-50"
             } disabled:cursor-not-allowed`}
+            title={myReactionType !== null ? "Click to remove reaction" : "React"}
           >
             {myReactionType !== null ? REACTIONS[myReactionType]?.emoji : "😀"}
             {postReactions.length > 0 && <span>{postReactions.length}</span>}
@@ -355,7 +376,7 @@ function OnChainPostCard({
           )}
           {reacting && (
             <div className="absolute bottom-full left-0 mb-2 bg-white rounded-2xl shadow-lg border border-[#E2E8F0] px-4 py-2 z-50">
-              <span className="text-xs text-[#64748B] animate-pulse">Sending...</span>
+              <span className="text-xs text-[#64748B] animate-pulse">{myReactionType !== null ? "Removing..." : "Sending..."}</span>
             </div>
           )}
         </div>

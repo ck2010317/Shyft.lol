@@ -675,6 +675,45 @@ export class ShyftClient {
     return sig;
   }
 
+  async removeReaction(author: PublicKey, postId: number): Promise<string> {
+    const wallet = this.provider.wallet.publicKey;
+    if (!wallet) throw new Error("Wallet not connected");
+
+    const treasury = await getTreasuryPubkey();
+    const [postPda] = getPostPda(author, postId);
+    const [reactionPda] = getReactionPda(postPda, wallet);
+
+    // Get rent amount before closing so we can refund treasury
+    const reactionAccount = await this.provider.connection.getAccountInfo(reactionPda);
+    const rentLamports = reactionAccount?.lamports || 0;
+
+    const closeIx = await this.program.methods
+      .closeReaction(new BN(postId))
+      .accountsPartial({
+        reaction: reactionPda,
+        post: postPda,
+        user: wallet,
+      })
+      .instruction();
+
+    // Return rent to treasury (close sends it to user, so we transfer it back)
+    const refundIx = SystemProgram.transfer({
+      fromPubkey: wallet,
+      toPubkey: treasury,
+      lamports: rentLamports,
+    });
+
+    const tx = new Transaction().add(closeIx).add(refundIx);
+    tx.feePayer = treasury;
+    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
+    const signed = await this.provider.wallet.signTransaction(tx);
+    const sig = await sponsorTransaction(signed, wallet.toBase58());
+
+    console.log("Reaction removed (treasury sponsored, rent refunded):", sig);
+    rpcCache.invalidate("allReactions");
+    return sig;
+  }
+
   async getAllReactions(): Promise<{ publicKey: string; post: string; user: string; reactionType: number }[]> {
     const cacheKey = "allReactions";
     const cached = rpcCache.get<any[]>(cacheKey);
