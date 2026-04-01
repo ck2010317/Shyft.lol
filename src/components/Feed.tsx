@@ -458,7 +458,7 @@ function OnChainPostCard({
         )}
 
         <a
-          href={`https://explorer.solana.com/address/${post.publicKey}?cluster=devnet`}
+          href={`https://explorer.solana.com/address/${post.publicKey}`}
           target="_blank"
           rel="noopener noreferrer"
           className={`ml-auto text-[10px] hover:underline text-[#2563EB]`}

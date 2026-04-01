@@ -195,7 +195,7 @@ export default function Payments() {
                   <span className="text-sm font-semibold text-[#15803D]">Payment Sent!</span>
                 </div>
                 <a
-                  href={`https://explorer.solana.com/tx/${txSignature}?cluster=devnet`}
+                  href={`https://explorer.solana.com/tx/${txSignature}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-[#2563EB] hover:underline flex items-center gap-1"

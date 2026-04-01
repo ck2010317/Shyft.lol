@@ -18,11 +18,6 @@ const solanaRpcs = {
     rpcSubscriptions: createSolanaRpcSubscriptions(`wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`),
     blockExplorerUrl: "https://explorer.solana.com",
   },
-  "solana:devnet": {
-    rpc: createSolanaRpc(`https://devnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`),
-    rpcSubscriptions: createSolanaRpcSubscriptions(`wss://devnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`),
-    blockExplorerUrl: "https://explorer.solana.com/?cluster=devnet",
-  },
 } as const;
 
 export default function WalletProvider({ children }: { children: React.ReactNode }) {

@@ -701,7 +701,7 @@ export default function Profile() {
                   {followLoading ? "..." : isFollowingUser ? "Following" : "Follow"}
                 </button>
                 <a
-                  href={`https://explorer.solana.com/address/${targetAddress}?cluster=devnet`}
+                  href={`https://explorer.solana.com/address/${targetAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-9 h-9 rounded-full border border-[#E2E8F0] flex items-center justify-center hover:bg-[#F1F5F9] transition-colors"
@@ -730,7 +730,7 @@ export default function Profile() {
                   )}
                 </button>
                 <a
-                  href={`https://explorer.solana.com/address/${publicKey?.toBase58()}?cluster=devnet`}
+                  href={`https://explorer.solana.com/address/${publicKey?.toBase58()}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-9 h-9 rounded-full border border-[#E2E8F0] flex items-center justify-center hover:bg-[#F1F5F9] transition-colors"
@@ -765,7 +765,7 @@ export default function Profile() {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3">
           <span className="flex items-center gap-1 text-[13px] text-[#64748B]">
             <Globe className="w-3.5 h-3.5" />
-            Solana Devnet
+            Solana Mainnet
           </span>
           <span className="flex items-center gap-1 text-[13px] text-[#64748B]">
             <Calendar className="w-3.5 h-3.5" />
@@ -819,7 +819,7 @@ export default function Profile() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-[#1A1A2E]">Wallet</h3>
-                <p className="text-[11px] text-[#64748B]">Solana Devnet · {isEmbeddedWallet ? 'Embedded' : walletClientName}</p>
+                <p className="text-[11px] text-[#64748B]">Solana Mainnet · {isEmbeddedWallet ? 'Embedded' : walletClientName}</p>
               </div>
             </div>
             <button
@@ -842,7 +842,7 @@ export default function Profile() {
               <span className="text-sm font-medium text-[#64748B]">SOL</span>
             </div>
             {walletBalance !== null && walletBalance < 0.01 && (
-              <p className="text-[11px] text-amber-600 mt-1">⚠️ Low balance — you need SOL for posts, comments & reactions</p>
+              <p className="text-[11px] text-amber-600 mt-1">⚠️ Low balance — SOL needed for token trading & payments</p>
             )}
           </div>
 
@@ -906,7 +906,7 @@ export default function Profile() {
               </span>
             </button>
             <a
-              href={`https://explorer.solana.com/address/${publicKey?.toBase58()}?cluster=devnet`}
+              href={`https://explorer.solana.com/address/${publicKey?.toBase58()}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex flex-col items-center gap-1.5 py-3 px-2 bg-white rounded-xl border border-[#E2E8F0] hover:bg-[#F8FAFC] hover:border-[#2563EB]/30 transition-all group"
