@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Shield, MessageCircle, Wallet, Lock, Users, ArrowRight, Zap, ChevronRight, Sparkles, Sun, Moon } from "lucide-react";
+import { Shield, MessageCircle, Wallet, Lock, Users, ArrowRight, Zap, ChevronRight, Sparkles, Sun, Moon, Activity } from "lucide-react";
 import { useWallet } from "@/hooks/usePrivyWallet";
 import { useAppStore } from "@/lib/store";
 
@@ -63,6 +63,18 @@ export default function Landing() {
   const [showApp, setShowApp] = useState(false);
   const { login, ready } = useWallet();
   const { theme, toggleTheme } = useAppStore();
+  const [stats, setStats] = useState<{
+    profiles: number; posts: number; follows: number;
+    reactions: number; comments: number; transactions: number;
+  } | null>(null);
+
+  // Fetch live on-chain stats
+  useEffect(() => {
+    fetch("/api/stats")
+      .then(r => r.json())
+      .then(data => { if (!data.error) setStats(data); })
+      .catch(() => {});
+  }, []);
 
   // Auto-cycle features every 4 seconds
   useEffect(() => {
@@ -172,6 +184,38 @@ export default function Landing() {
           </div>
         </div>
       </div>
+
+      {/* Live On-Chain Stats */}
+      {stats && (
+        <div className="px-4 sm:px-6 md:px-12 py-8 sm:py-10 bg-white border-t border-[#E2E8F0]">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <Activity className="w-4 h-4 text-[#16A34A]" />
+              <p className="text-xs font-semibold uppercase tracking-widest text-[#94A3B8]">Live On-Chain Stats</p>
+              <div className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse" />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+              {[
+                { label: "Profiles", value: stats.profiles, icon: "👤", color: "#2563EB" },
+                { label: "Posts", value: stats.posts, icon: "📝", color: "#16A34A" },
+                { label: "Reactions", value: stats.reactions + stats.comments, icon: "💬", color: "#2563EB" },
+                { label: "Connections", value: stats.follows, icon: "🤝", color: "#16A34A" },
+              ].map((stat, i) => (
+                <div key={i} className="bg-[#F8FAFC] rounded-2xl border border-[#E2E8F0] p-4 sm:p-5 text-center hover:shadow-md transition-shadow">
+                  <span className="text-2xl">{stat.icon}</span>
+                  <p className="text-2xl sm:text-3xl font-bold mt-2" style={{ color: stat.color }}>
+                    {stat.value.toLocaleString()}
+                  </p>
+                  <p className="text-[10px] sm:text-xs text-[#94A3B8] mt-1 font-medium">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-center text-[10px] text-[#CBD5E1] mt-4">
+              Real-time data from Solana mainnet · Program EEno...MxjQ
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Feature Preview Section */}
       <div id="features" className="px-4 sm:px-6 md:px-12 py-12 sm:py-16 md:py-24 bg-white border-t border-[#E2E8F0]">
