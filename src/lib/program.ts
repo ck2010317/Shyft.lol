@@ -20,7 +20,6 @@ const MESSAGE_SEED = Buffer.from("message");
 const FOLLOW_SEED = Buffer.from("follow");
 const COMMENT_SEED = Buffer.from("comment");
 const REACTION_SEED = Buffer.from("reaction");
-const CONVERSATION_SEED = Buffer.from("conversation");
 
 // ========== Simple In-Memory Cache ==========
 
@@ -159,13 +158,6 @@ function getReactionPda(postPda: PublicKey, user: PublicKey): [PublicKey, number
 
 
 
-function getConversationPda(user1: PublicKey, user2: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [CONVERSATION_SEED, user1.toBuffer(), user2.toBuffer()],
-    PROGRAM_ID
-  );
-}
-
 export class ShyftClient {
   program: Program;
   provider: AnchorProvider;
@@ -281,12 +273,6 @@ export class ShyftClient {
       }
       return null;
     }
-  }
-
-  // updateProfilePrivacy — stub for future visibility controls
-  async updateProfilePrivacy(_isPrivate: boolean): Promise<string> {
-    console.warn("updateProfilePrivacy is not yet implemented");
-    return "deprecated";
   }
 
   /** Check if a username is already taken by any profile on-chain */
@@ -1361,7 +1347,6 @@ export {
   getChatPda,
   getMessagePda,
   getFollowPda,
-  getConversationPda,
   toLEBytes,
   PROGRAM_ID,
 };
