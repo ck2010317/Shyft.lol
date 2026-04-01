@@ -39,7 +39,7 @@ const BLOCKED_USERNAMES = new Set([
   "anthropic", "claude", "gemini", "nvidia", "samsung",
 
   // Reserved for specific users
-  "fezweb3",
+  "fezweb3", "catmcgee",
 
   // Offensive (abbreviated — add more as needed)
   "fuck", "shit", "ass", "dick", "porn", "sex", "nazi", "hitler",
@@ -59,6 +59,7 @@ const INVITE_CODES: InviteEntry[] = [
   { username: "bitcoin", code: "BTC-SHYFT-2026" },
   { username: "shyft", code: "SHYFT-SHYFT-2026" },
   { username: "fezweb3", code: "FEZ-SHYFT-2026" },
+  { username: "catmcgee", code: "CAT-SHYFT-2026" },
   // Add more: { username: "solana", code: "SOL-SHYFT-9X2K" },
 ];
 
