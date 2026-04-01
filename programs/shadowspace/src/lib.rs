@@ -58,8 +58,8 @@ pub mod shadowspace {
     ) -> Result<()> {
         require!(display_name.len() <= 24, ShadowError::ContentTooLong);
         require!(bio.len() <= 64, ShadowError::ContentTooLong);
-        require!(avatar_url.len() <= 64, ShadowError::ContentTooLong);
-        require!(banner_url.len() <= 64, ShadowError::ContentTooLong);
+        require!(avatar_url.len() <= 128, ShadowError::ContentTooLong);
+        require!(banner_url.len() <= 128, ShadowError::ContentTooLong);
         let profile = &mut ctx.accounts.profile;
         profile.display_name = display_name;
         profile.bio = bio;
@@ -292,7 +292,7 @@ pub struct UpdateProfile<'info> {
     #[account(
         mut,
         realloc = 8 + Profile::LEN,
-        realloc::payer = user,
+        realloc::payer = payer,
         realloc::zero = false,
         seeds = [PROFILE_SEED, user.key().as_ref()],
         bump,
@@ -300,6 +300,9 @@ pub struct UpdateProfile<'info> {
     pub profile: Account<'info, Profile>,
     #[account(mut)]
     pub user: Signer<'info>,
+    /// Fee payer — treasury pays for realloc rent in gasless UX
+    #[account(mut)]
+    pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -555,8 +558,8 @@ pub struct Profile {
 impl Profile {
     // 32(owner) + (4+16)(username) + (4+24)(display) + (4+64)(bio) + 1(private)
     // + 4(posts) + 4(followers) + 4(following) + 2(convos legacy) + 8(created)
-    // + (4+64)(avatar) + (4+64)(banner)
-    pub const LEN: usize = 32 + 4 + 16 + 4 + 24 + 4 + 64 + 1 + 4 + 4 + 4 + 2 + 8 + 4 + 64 + 4 + 64;
+    // + (4+128)(avatar) + (4+128)(banner)
+    pub const LEN: usize = 32 + 4 + 16 + 4 + 24 + 4 + 64 + 1 + 4 + 4 + 4 + 2 + 8 + 4 + 128 + 4 + 128;
 }
 
 #[account]

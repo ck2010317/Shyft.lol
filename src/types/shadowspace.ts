@@ -1450,6 +1450,14 @@ export type Shadowspace = {
           "signer": true
         },
         {
+          "name": "payer",
+          "docs": [
+            "Fee payer — treasury pays for realloc rent in gasless UX"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }

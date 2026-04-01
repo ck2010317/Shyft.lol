@@ -291,11 +291,24 @@ export class ShyftClient {
     const [profilePda] = getProfilePda(user);
     const treasury = await getTreasuryPubkey();
 
+    // Auto-migrate profile if account is undersized (e.g. avatar/banner fields grew)
+    try {
+      const acctInfo = await this.provider.connection.getAccountInfo(profilePda);
+      const expectedSize = 8 + 32 + (4+16) + (4+24) + (4+64) + 1 + 4 + 4 + 4 + 2 + 8 + (4+128) + (4+128); // 8 + Profile::LEN
+      if (acctInfo && acctInfo.data.length < expectedSize) {
+        console.log(`Profile account undersized (${acctInfo.data.length} < ${expectedSize}), migrating...`);
+        await this.migrateProfile();
+      }
+    } catch (e) {
+      console.warn("Migration check failed, continuing:", e);
+    }
+
     const ix = await this.program.methods
       .updateProfile(displayName, bio, avatarUrl, bannerUrl)
       .accounts({
         profile: profilePda,
         user,
+        payer: treasury,
         systemProgram: SystemProgram.programId,
       })
       .instruction();
