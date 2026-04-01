@@ -31,6 +31,7 @@ pub mod shadowspace {
         profile.post_count = 0;
         profile.follower_count = 0;
         profile.following_count = 0;
+        profile.active_conversation_count = 0;
         profile.avatar_url = String::new();
         profile.banner_url = String::new();
         profile.created_at = Clock::get()?.unix_timestamp;
@@ -545,6 +546,7 @@ pub struct Profile {
     pub post_count: u32,
     pub follower_count: u32,
     pub following_count: u32,
+    pub active_conversation_count: u16, // legacy field — must stay for deserialization
     pub created_at: i64,
     pub avatar_url: String,
     pub banner_url: String,
@@ -552,9 +554,9 @@ pub struct Profile {
 
 impl Profile {
     // 32(owner) + (4+16)(username) + (4+24)(display) + (4+64)(bio) + 1(private)
-    // + 4(posts) + 4(followers) + 4(following) + 8(created)
+    // + 4(posts) + 4(followers) + 4(following) + 2(convos legacy) + 8(created)
     // + (4+64)(avatar) + (4+64)(banner)
-    pub const LEN: usize = 32 + 4 + 16 + 4 + 24 + 4 + 64 + 1 + 4 + 4 + 4 + 8 + 4 + 64 + 4 + 64;
+    pub const LEN: usize = 32 + 4 + 16 + 4 + 24 + 4 + 64 + 1 + 4 + 4 + 4 + 2 + 8 + 4 + 64 + 4 + 64;
 }
 
 #[account]

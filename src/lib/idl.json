@@ -1776,6 +1776,10 @@
             "type": "u32"
           },
           {
+            "name": "active_conversation_count",
+            "type": "u16"
+          },
+          {
             "name": "created_at",
             "type": "i64"
           },

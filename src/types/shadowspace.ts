@@ -1782,6 +1782,10 @@ export type Shadowspace = {
             "type": "u32"
           },
           {
+            "name": "activeConversationCount",
+            "type": "u16"
+          },
+          {
             "name": "createdAt",
             "type": "i64"
           },
