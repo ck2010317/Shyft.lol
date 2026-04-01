@@ -24,6 +24,9 @@ const ALLOWED_PROGRAMS = new Set([
   SystemProgram.programId.toBase58(), // 11111111111111111111111111111111
   "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL", // Associated Token Program (for account creation)
   "ComputeBudget111111111111111111111111111111",     // Compute Budget (priority fees, unit limits)
+  "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",  // SPL Memo Program (Phantom, Jupiter, etc.)
+  "Ed25519SigVerify111111111111111111111111111",     // Ed25519 precompile (signature verification)
+  "KeccakSecp256k11111111111111111111111111111",     // Secp256k1 precompile
 ]);
 
 function getTreasuryKeypair(): Keypair {
