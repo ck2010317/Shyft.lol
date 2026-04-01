@@ -29,7 +29,7 @@ const BLOCKED_USERNAMES = new Set([
   "circle", "usdc", "usdt", "tether", "chainlink", "uniswap",
   "aave", "compound", "makerdao", "lido", "polygon", "avalanche",
   "arbitrum", "optimism", "sui", "aptos", "near", "cosmos",
-  "bags", "bagsfm", "bags_fm",
+  "bags", "bagsfm", "bags_fm", "bagsapp", "finnbags",
 
   // Big tech / brands
   "apple", "google", "microsoft", "amazon", "meta", "facebook",
