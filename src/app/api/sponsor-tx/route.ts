@@ -86,6 +86,7 @@ const ALLOWED_ORIGINS = new Set([
   "https://shyft.lol",
   "http://localhost:3000",        // local dev
   "http://localhost:3001",
+  "http://localhost:3099",
 ]);
 
 function isAllowedOrigin(request: NextRequest): boolean {

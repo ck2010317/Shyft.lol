@@ -17,102 +17,179 @@ export async function GET(req: NextRequest) {
           height: "630",
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#ffffff",
+          backgroundColor: "#0A0A0F",
           fontFamily: "system-ui, sans-serif",
+          position: "relative",
+          overflow: "hidden",
         }}
       >
-        {/* Top accent bar */}
+        {/* Background glow */}
         <div
           style={{
             position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: "6px",
-            background: "linear-gradient(90deg, #10B981, #059669, #047857)",
+            top: "-100px",
+            right: "-100px",
+            width: "500px",
+            height: "500px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(16,185,129,0.15) 0%, transparent 70%)",
+            display: "flex",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            bottom: "-150px",
+            left: "-100px",
+            width: "400px",
+            height: "400px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(37,99,235,0.1) 0%, transparent 70%)",
             display: "flex",
           }}
         />
 
-        {/* Emoji */}
-        <div style={{ fontSize: "72px", marginBottom: "16px", display: "flex" }}>💸</div>
-
-        {/* Username */}
+        {/* Main content */}
         <div
           style={{
-            fontSize: "28px",
-            color: "#64748B",
-            marginBottom: "12px",
             display: "flex",
+            flexDirection: "column",
+            padding: "60px 80px",
+            flex: 1,
+            justifyContent: "center",
           }}
         >
-          @{user} earned
+          {/* Top label */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              marginBottom: "20px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "16px",
+                fontWeight: 700,
+                color: "#10B981",
+                textTransform: "uppercase" as const,
+                letterSpacing: "3px",
+                display: "flex",
+              }}
+            >
+              TIP EARNINGS
+            </div>
+            <div
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                backgroundColor: "#10B981",
+                display: "flex",
+              }}
+            />
+          </div>
+
+          {/* Username */}
+          <div
+            style={{
+              fontSize: "32px",
+              fontWeight: 600,
+              color: "#94A3B8",
+              marginBottom: "16px",
+              display: "flex",
+            }}
+          >
+            @{user}
+          </div>
+
+          {/* Big amount */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: "16px",
+              marginBottom: "16px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "120px",
+                fontWeight: 800,
+                color: "#FFFFFF",
+                lineHeight: 1,
+                letterSpacing: "-4px",
+                display: "flex",
+              }}
+            >
+              +{amount}
+            </div>
+            <div
+              style={{
+                fontSize: "48px",
+                fontWeight: 700,
+                color: "#10B981",
+                display: "flex",
+              }}
+            >
+              SOL
+            </div>
+          </div>
+
+          {/* Tip count */}
+          <div
+            style={{
+              fontSize: "22px",
+              color: "#475569",
+              display: "flex",
+            }}
+          >
+            from {tips} {Number(tips) === 1 ? "tip" : "tips"}
+          </div>
         </div>
 
-        {/* SOL amount — big and bold */}
-        <div
-          style={{
-            fontSize: "96px",
-            fontWeight: 800,
-            color: "#0F172A",
-            lineHeight: 1,
-            marginBottom: "12px",
-            display: "flex",
-            alignItems: "baseline",
-            gap: "12px",
-          }}
-        >
-          {amount}
-          <span style={{ fontSize: "48px", color: "#10B981", fontWeight: 700 }}>
-            SOL
-          </span>
-        </div>
-
-        {/* Tip count */}
-        <div
-          style={{
-            fontSize: "24px",
-            color: "#94A3B8",
-            marginBottom: "40px",
-            display: "flex",
-          }}
-        >
-          from {tips} {Number(tips) === 1 ? "tip" : "tips"} on a post
-        </div>
-
-        {/* Branding */}
+        {/* Bottom bar */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "10px",
+            justifyContent: "space-between",
+            padding: "24px 80px",
+            borderTop: "1px solid rgba(148,163,184,0.1)",
           }}
         >
           <div
             style={{
-              fontSize: "22px",
-              fontWeight: 700,
-              color: "#2563EB",
               display: "flex",
+              alignItems: "center",
+              gap: "10px",
             }}
           >
-            shyft.lol
+            <div
+              style={{
+                fontSize: "20px",
+                fontWeight: 800,
+                color: "#FFFFFF",
+                display: "flex",
+              }}
+            >
+              SHYFT
+            </div>
+            <div
+              style={{
+                fontSize: "16px",
+                color: "#475569",
+                display: "flex",
+              }}
+            >
+              shyft.lol
+            </div>
           </div>
           <div
             style={{
-              fontSize: "18px",
-              color: "#CBD5E1",
-              display: "flex",
-            }}
-          >
-            •
-          </div>
-          <div
-            style={{
-              fontSize: "18px",
-              color: "#94A3B8",
+              fontSize: "14px",
+              color: "#334155",
               display: "flex",
             }}
           >

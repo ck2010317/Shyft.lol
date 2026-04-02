@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 interface Props {
   searchParams: Promise<{ amount?: string; tips?: string; user?: string }>;
@@ -35,6 +34,25 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 }
 
 export default async function TipPage({ searchParams }: Props) {
-  // When someone actually visits this page, redirect to the main app
-  redirect("/");
+  const params = await searchParams;
+  const user = params.user || "someone";
+  const amount = params.amount || "0";
+
+  // Render a real page so X/Twitter bot can scrape meta tags
+  // Client-side redirect happens after 2 seconds
+  return (
+    <html>
+      <head>
+        <meta httpEquiv="refresh" content="2;url=https://www.shyft.lol" />
+      </head>
+      <body style={{ margin: 0, backgroundColor: "#fff", display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: "system-ui, sans-serif" }}>
+        <div style={{ textAlign: "center", padding: "2rem" }}>
+          <p style={{ fontSize: "48px", margin: "0 0 16px" }}>💸</p>
+          <h1 style={{ fontSize: "24px", color: "#0F172A", margin: "0 0 8px" }}>@{user} earned {amount} SOL in tips</h1>
+          <p style={{ fontSize: "16px", color: "#64748B", margin: "0 0 24px" }}>on Shyft — On-Chain Social on Solana</p>
+          <a href="https://www.shyft.lol" style={{ color: "#2563EB", fontSize: "14px" }}>Go to Shyft →</a>
+        </div>
+      </body>
+    </html>
+  );
 }
