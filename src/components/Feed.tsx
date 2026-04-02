@@ -472,7 +472,13 @@ function OnChainPostCard({
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions — hidden behind paywall for locked paid posts */}
+      {isPaid && !isUnlocked ? (
+        <div className="flex items-center gap-2 pl-0 sm:pl-14 border-t border-[#F1F5F9] pt-3">
+          <Lock className="w-3.5 h-3.5 text-amber-400" />
+          <span className="text-xs text-[#94A3B8]">Unlock this post to like, comment & share</span>
+        </div>
+      ) : (
       <div className="flex items-center gap-0.5 sm:gap-1 pl-0 sm:pl-14 border-t border-[#F1F5F9] pt-3">
         <button
           onClick={handleLike}
@@ -540,7 +546,16 @@ function OnChainPostCard({
           )}
         </div>
 
-        {/* Repost */}
+        {/* Repost — blocked for paid posts */}
+        {isPaid ? (
+          <button
+            disabled
+            className="touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium text-[#94A3B8] opacity-30 cursor-not-allowed"
+            title="Paid posts cannot be reposted"
+          >
+            <Repeat2 className="w-4 h-4" />
+          </button>
+        ) : (
         <button
           disabled={reposting || !isConnected}
           onClick={async () => {
@@ -561,17 +576,18 @@ function OnChainPostCard({
         >
           <Repeat2 className="w-4 h-4" />
         </button>
+        )}
 
-        {/* Share */}
+        {/* Share — don't leak paid content */}
         <button
           onClick={async () => {
             const authorName = profile?.username ? `@${profile.username}` : post.author.slice(0, 8);
-            const preview = post.content.length > 80 ? post.content.slice(0, 80) + "..." : post.content;
+            const shareContent = isPaid ? `🔒 Paid post by ${authorName} on Shyft — unlock to view` : (post.content.length > 80 ? post.content.slice(0, 80) + "..." : post.content);
             const shareUrl = `https://www.shyft.lol`;
-            const shareText = `"${preview}" — ${authorName} on Shyft\n\n${shareUrl}`;
+            const shareText = `"${shareContent}" — ${authorName} on Shyft\n\n${shareUrl}`;
             if (navigator.share) {
               try {
-                await navigator.share({ title: `${authorName} on Shyft`, text: `"${preview}"`, url: shareUrl });
+                await navigator.share({ title: `${authorName} on Shyft`, text: `"${shareContent}"`, url: shareUrl });
               } catch {}
             } else {
               await navigator.clipboard.writeText(shareText);
@@ -625,9 +641,10 @@ function OnChainPostCard({
           View on Explorer
         </a>
       </div>
+      )}
 
-      {/* On-chain comments section */}
-      {showComments && (
+      {/* On-chain comments section — hidden for locked paid posts */}
+      {showComments && !(isPaid && !isUnlocked) && (
         <div className="mt-3 pl-0 sm:pl-14 space-y-3">
           {postComments.length === 0 && !commenting && (
             <p className="text-xs text-[#94A3B8] text-center py-2">No comments yet. Be the first to comment on-chain!</p>
