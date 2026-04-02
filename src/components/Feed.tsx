@@ -94,6 +94,8 @@ function OnChainPostCard({
   const [showTip, setShowTip] = useState(false);
   const [tipping, setTipping] = useState(false);
   const [tipAmount, setTipAmount] = useState("");
+  const [showFlexInput, setShowFlexInput] = useState(false);
+  const [flexAmount, setFlexAmount] = useState("");
 
   // Paid post detection
   const { isPaid, price: postPrice, actualContent } = parsePaidPost(post.content);
@@ -236,6 +238,23 @@ function OnChainPostCard({
   };
 
   const tipInfo = postTips[post.publicKey];
+
+  const handleFlex = async () => {
+    const amt = flexAmount || "0";
+    if (Number(amt) <= 0) return;
+    const myName = currentUser?.username || "someone";
+    const flexUrl = `https://www.shyft.lol/tip?user=${encodeURIComponent(myName)}&amount=${amt}&tips=1`;
+    const flexText = `💸 @${myName} earned ${amt} SOL in tips on a single post on Shyft!\n\nGet tipped for your posts →`;
+    setShowFlexInput(false);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `💸 @${myName} earned ${amt} SOL in tips on Shyft`, text: flexText, url: flexUrl });
+      } catch {}
+    } else {
+      await navigator.clipboard.writeText(`${flexText} ${flexUrl}`);
+      toast("success", "Copied to clipboard! 💸", "Flex those earnings on X");
+    }
+  };
 
   // Group reactions by type
   const reactionCounts: Record<number, number> = {};
@@ -762,30 +781,44 @@ function OnChainPostCard({
           </button>
         )}
 
-        {/* Flex Earnings — own posts with tips */}
-        {isMe && tipInfo && tipInfo.totalAmount > 0 && (
-          <button
-            onClick={async () => {
-              const myName = currentUser?.username || "someone";
-              const amt = tipInfo.totalAmount.toFixed(2);
-              const count = tipInfo.tipCount;
-              const flexUrl = `https://www.shyft.lol/tip?user=${encodeURIComponent(myName)}&amount=${amt}&tips=${count}`;
-              const flexText = `💸 @${myName} earned ${amt} SOL in tips${count > 1 ? ` from ${count} tips` : ""} on a single post on Shyft!\n\nGet tipped for your posts →`;
-              if (navigator.share) {
-                try {
-                  await navigator.share({ title: `💸 @${myName} earned ${amt} SOL in tips on Shyft`, text: flexText, url: flexUrl });
-                } catch {}
-              } else {
-                await navigator.clipboard.writeText(`${flexText} ${flexUrl}`);
-                toast("success", "Copied to clipboard! 💸", "Flex those earnings on X");
-              }
-            }}
-            className="touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 transition-all"
-            title="Share your tip earnings"
-          >
-            <TrendingUp className="w-4 h-4" />
-            Flex
-          </button>
+        {/* Flex Earnings — own posts, creator enters amount to share */}
+        {isMe && (
+          <div className="relative">
+            <button
+              onClick={() => setShowFlexInput(!showFlexInput)}
+              className="touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 transition-all"
+              title="Share your tip earnings"
+            >
+              <TrendingUp className="w-4 h-4" />
+              Flex
+            </button>
+
+            {showFlexInput && (
+              <div className="absolute bottom-full left-0 mb-2 bg-white rounded-2xl shadow-lg border border-[#E2E8F0] p-3 z-50 animate-fade-in min-w-[220px]">
+                <p className="text-xs font-semibold text-[#1E293B] mb-1">Flex your earnings 💸</p>
+                <p className="text-[10px] text-[#94A3B8] mb-2">Enter how much SOL you earned in tips</p>
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="e.g. 1.25"
+                    value={flexAmount}
+                    onChange={(e) => setFlexAmount(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 rounded-lg text-xs border border-[#E2E8F0] bg-[#F8FAFC] focus:outline-none focus:ring-1 focus:ring-emerald-300"
+                    onKeyDown={(e) => { if (e.key === "Enter" && flexAmount) handleFlex(); }}
+                  />
+                  <button
+                    onClick={handleFlex}
+                    disabled={!flexAmount || Number(flexAmount) <= 0}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Share
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         <a
