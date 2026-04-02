@@ -782,13 +782,13 @@ function OnChainPostCard({
                 const amt = data.totalSol;
                 const count = data.tipCount;
                 const flexUrl = `https://www.shyft.lol/tip?user=${encodeURIComponent(myName)}&amount=${amt}&tips=${count}`;
-                const flexText = `💸 @${myName} earned ${amt} SOL in tips${count > 1 ? ` from ${count} transfers` : ""} on Shyft!\n\nGet tipped for your posts →`;
+                const flexText = `💸 @${myName} earned ${amt} SOL in tips on Shyft!\n\nGet tipped for your posts →\n\n${flexUrl}`;
                 if (navigator.share) {
                   try {
-                    await navigator.share({ title: `💸 @${myName} earned ${amt} SOL on Shyft`, text: flexText, url: flexUrl });
+                    await navigator.share({ title: `💸 @${myName} earned ${amt} SOL on Shyft`, text: flexText });
                   } catch {}
                 } else {
-                  await navigator.clipboard.writeText(`${flexText} ${flexUrl}`);
+                  await navigator.clipboard.writeText(flexText);
                   toast("success", "Copied to clipboard! 💸", "Paste on X to flex");
                 }
               } catch (err: any) {
