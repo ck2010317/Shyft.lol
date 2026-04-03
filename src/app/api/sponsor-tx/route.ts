@@ -195,8 +195,8 @@ export async function POST(request: NextRequest) {
     // ComputeBudget SetComputeUnitPrice has type byte = 3.
     // ComputeBudget SetComputeUnitLimit has type byte = 2.
     const COMPUTE_BUDGET_ID = "ComputeBudget111111111111111111111111111111";
-    const MAX_COMPUTE_UNIT_PRICE = 100_000; // 0.0001 SOL per CU — more than enough for priority
-    const MAX_COMPUTE_UNITS = 400_000; // standard limit
+    const MAX_COMPUTE_UNIT_PRICE = 1_000; // 1000 microlamports — plenty for priority, max fee ~0.0004 SOL/tx
+    const MAX_COMPUTE_UNITS = 200_000; // enough for any single Shadowspace instruction
     for (const ix of tx.instructions) {
       if (ix.programId.toBase58() === COMPUTE_BUDGET_ID && ix.data.length >= 1) {
         const ixType = ix.data[0];
