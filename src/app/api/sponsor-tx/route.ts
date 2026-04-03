@@ -10,25 +10,25 @@ import {
 /**
  * /api/sponsor-tx — Treasury signs as fee payer for user transactions.
  *
- * SECURITY: Only signs transactions that call the Shadowspace program.
- * Rejects any transaction with SOL transfers, token transfers, or calls
- * to unknown programs. This prevents treasury drain attacks.
+ * SECURITY LAYERS:
+ * 1. Origin check — only shyft.lol (no empty origin fallback)
+ * 2. IP-based rate limiting — 5 tx per IP per minute
+ * 3. Wallet-based rate limiting — 5 tx per wallet per minute
+ * 4. walletAddress MUST be a signer on the tx
+ * 5. ONLY Shadowspace + SystemProgram + ComputeBudget allowed
+ * 6. Every tx MUST include at least one Shadowspace instruction
+ * 7. Treasury must NOT be source on ANY SystemProgram instruction
+ * 8. Max 6 instructions per tx
+ * 9. Treasury balance reserve check
  */
 
-// The ONLY program allowed in sponsored transactions (besides SystemProgram for account creation)
 const SHADOWSPACE_PROGRAM_ID = new PublicKey("EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ");
 
-// Programs allowed in instructions (SystemProgram is needed for account init/PDA creation)
-// NOTE: ATokenGP removed — was exploited to create ATAs at treasury expense.
-// Every sponsored tx MUST contain at least one Shadowspace instruction (enforced below).
+// MINIMAL allowed programs — only what Shadowspace needs
 const ALLOWED_PROGRAMS = new Set([
   SHADOWSPACE_PROGRAM_ID.toBase58(),
-  SystemProgram.programId.toBase58(), // 11111111111111111111111111111111
-  "ComputeBudget111111111111111111111111111111",     // Compute Budget (priority fees, unit limits)
-  "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",  // SPL Memo Program (Phantom, Jupiter, etc.)
-  "Ed25519SigVerify111111111111111111111111111",     // Ed25519 precompile (signature verification)
-  "KeccakSecp256k11111111111111111111111111111",     // Secp256k1 precompile
-  "L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95",   // Privy wallet infrastructure (session keys / smart wallet)
+  SystemProgram.programId.toBase58(),
+  "ComputeBudget111111111111111111111111111111",
 ]);
 
 function getTreasuryKeypair(): Keypair {
@@ -59,17 +59,36 @@ function getTreasuryKeypair(): Keypair {
 // Shadowspace on-chain program is on mainnet
 const RPC_URL = process.env.HELIUS_MAINNET_RPC || `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
 
-// Rate limit: max 10 sponsored tx per wallet per minute
-const txTimestamps = new Map<string, number[]>();
+// Rate limiting — per IP AND per wallet, 5 per minute each
+const ipTimestamps = new Map<string, number[]>();
+const walletTimestamps = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_MAX = 5;
 
 // Min treasury balance to keep as reserve
 const MIN_TREASURY_RESERVE = 100_000_000; // 0.1 SOL
 
 let cachedTreasuryPubkey: string | null = null;
 
-/** GET — returns the treasury public key so the frontend knows the fee payer address */
+function getClientIp(request: NextRequest): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown"
+  );
+}
+
+function isRateLimited(key: string, store: Map<string, number[]>): boolean {
+  const now = Date.now();
+  const timestamps = (store.get(key) || []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  store.set(key, timestamps);
+  if (timestamps.length >= RATE_LIMIT_MAX) return true;
+  timestamps.push(now);
+  store.set(key, timestamps);
+  return false;
+}
+
+/** GET — returns the treasury public key */
 export async function GET() {
   try {
     if (!cachedTreasuryPubkey) {
@@ -81,11 +100,11 @@ export async function GET() {
   }
 }
 
-// Allowed origins — only shyft.lol can call this API
+// Allowed origins — STRICT. No empty origin fallback.
 const ALLOWED_ORIGINS = new Set([
   "https://www.shyft.lol",
   "https://shyft.lol",
-  "http://localhost:3000",        // local dev
+  "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:3099",
 ]);
@@ -93,41 +112,29 @@ const ALLOWED_ORIGINS = new Set([
 function isAllowedOrigin(request: NextRequest): boolean {
   const origin = request.headers.get("origin") || "";
   const referer = request.headers.get("referer") || "";
-  // Check origin header first (set on cross-origin requests)
   if (origin && ALLOWED_ORIGINS.has(origin)) return true;
-  // Fallback: check referer starts with an allowed origin
   for (const allowed of ALLOWED_ORIGINS) {
     if (referer.startsWith(allowed)) return true;
   }
-  // Same-origin requests from Next.js (server components) may have no origin/referer
-  // Allow if both are empty (internal server-side call)
-  if (!origin && !referer) return true;
+  // NO FALLBACK — if both origin and referer are missing/invalid, DENY.
   return false;
 }
 
 /** POST — accepts a partially-signed tx (base64), adds treasury signature, sends it */
 export async function POST(request: NextRequest) {
   try {
-    // Block requests from unauthorized origins (other websites)
+    // ── 1. ORIGIN CHECK (strict — no empty fallback) ──
     if (!isAllowedOrigin(request)) {
-      console.error(`🚨 BLOCKED: Unauthorized origin — origin: ${request.headers.get("origin")}, referer: ${request.headers.get("referer")}`);
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 403 }
-      );
+      console.error(`🚨 BLOCKED origin: ${request.headers.get("origin")} | ref: ${request.headers.get("referer")}`);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const body = await request.json();
     const { transaction, walletAddress } = body;
-
     if (!transaction || !walletAddress) {
-      return NextResponse.json(
-        { error: "Missing transaction or walletAddress" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing transaction or walletAddress" }, { status: 400 });
     }
 
-    // Validate wallet address
     let walletPubkey: PublicKey;
     try {
       walletPubkey = new PublicKey(walletAddress);
@@ -135,139 +142,98 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid walletAddress" }, { status: 400 });
     }
 
-    // Rate limit per wallet
-    const now = Date.now();
-    const timestamps = txTimestamps.get(walletAddress) || [];
-    const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-    if (recent.length >= RATE_LIMIT_MAX) {
-      return NextResponse.json(
-        { error: "Rate limited. Too many sponsored transactions." },
-        { status: 429 }
-      );
+    // ── 2. RATE LIMIT — by IP AND wallet ──
+    const clientIp = getClientIp(request);
+    if (isRateLimited(clientIp, ipTimestamps)) {
+      console.error(`🚨 IP rate limited: ${clientIp}`);
+      return NextResponse.json({ error: "Rate limited" }, { status: 429 });
+    }
+    if (isRateLimited(walletAddress, walletTimestamps)) {
+      console.error(`🚨 Wallet rate limited: ${walletAddress}`);
+      return NextResponse.json({ error: "Rate limited" }, { status: 429 });
     }
 
     const connection = new Connection(RPC_URL, "confirmed");
     const treasury = getTreasuryKeypair();
 
-    // Check treasury balance
+    // ── 3. TREASURY BALANCE CHECK ──
     const treasuryBalance = await connection.getBalance(treasury.publicKey);
     if (treasuryBalance < MIN_TREASURY_RESERVE) {
-      console.error("⚠️ Treasury balance too low:", treasuryBalance / 1e9, "SOL");
-      return NextResponse.json(
-        { error: "Platform treasury low — please try again later" },
-        { status: 503 }
-      );
+      console.error("⚠️ Treasury low:", treasuryBalance / 1e9, "SOL");
+      return NextResponse.json({ error: "Platform treasury low" }, { status: 503 });
     }
 
-    // Deserialize the partially-signed transaction
+    // ── 4. DESERIALIZE TX ──
     let tx: Transaction;
     try {
-      const txBuffer = Buffer.from(transaction, "base64");
-      tx = Transaction.from(txBuffer);
+      tx = Transaction.from(Buffer.from(transaction, "base64"));
     } catch {
       return NextResponse.json({ error: "Invalid transaction data" }, { status: 400 });
     }
 
-    // Verify the fee payer is the treasury
+    // ── 5. VERIFY FEE PAYER IS TREASURY ──
     if (!tx.feePayer || !tx.feePayer.equals(treasury.publicKey)) {
-      return NextResponse.json(
-        { error: "Transaction fee payer must be the platform treasury" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Fee payer must be treasury" }, { status: 400 });
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // CRITICAL SECURITY: Validate ALL instructions in the transaction.
-    // Only allow calls to the Shadowspace program and SystemProgram.
-    // This prevents attackers from crafting SOL transfer instructions
-    // that would drain the treasury.
-    // ──────────────────────────────────────────────────────────────
-    // Log ALL program IDs for debugging
-    const allProgramIds = tx.instructions.map((ix: any) => ix.programId.toBase58());
-    console.log(`📋 Transaction from ${walletAddress} contains programs:`, allProgramIds);
+    // ── 6. VERIFY walletAddress IS A SIGNER ON THE TX ──
+    const txSigners = tx.signatures
+      .filter((s) => s.signature !== null || s.publicKey.equals(walletPubkey))
+      .map((s) => s.publicKey.toBase58());
+    if (!txSigners.includes(walletAddress)) {
+      console.error(`🚨 BLOCKED: walletAddress ${walletAddress} is not a signer on the tx`);
+      return NextResponse.json({ error: "Wallet must be a signer" }, { status: 403 });
+    }
 
+    // ── 7. INSTRUCTION LIMIT ──
+    if (tx.instructions.length > 6) {
+      return NextResponse.json({ error: "Too many instructions" }, { status: 400 });
+    }
+
+    // ── 8. VALIDATE ALL PROGRAMS ──
+    const allProgramIds = tx.instructions.map((ix: any) => ix.programId.toBase58());
     for (const ix of tx.instructions) {
       const programId = ix.programId.toBase58();
-
       if (!ALLOWED_PROGRAMS.has(programId)) {
-        console.error(
-          `🚨 BLOCKED: Wallet ${walletAddress} tried to call unauthorized program: ${programId}`
-        );
-        console.error(`🚨 All programs in tx:`, allProgramIds);
-        return NextResponse.json(
-          { error: `Transaction contains unauthorized program call: ${programId}` },
-          { status: 403 }
-        );
+        console.error(`🚨 BLOCKED program: ${programId} from ${walletAddress}`);
+        return NextResponse.json({ error: "Unauthorized program" }, { status: 403 });
       }
+    }
 
-      // Extra check: if it's a SystemProgram instruction, make sure
-      // the treasury is NOT the source of a transfer (instruction type 2 = Transfer).
-      // SystemProgram Transfer instruction layout: [u32 type (LE), u64 lamports (LE)]
-      // type 2 = Transfer. The first account is the source.
-      if (programId === SystemProgram.programId.toBase58()) {
-        const ixType = ix.data.length >= 4 ? ix.data.readUInt32LE(0) : -1;
-        // 2 = Transfer, 12 = TransferWithSeed
-        if (ixType === 2 || ixType === 12) {
-          // First account key is the source — must NOT be the treasury
-          const sourceKey = ix.keys[0]?.pubkey;
-          if (sourceKey && sourceKey.equals(treasury.publicKey)) {
-            console.error(
-              `🚨 BLOCKED: Wallet ${walletAddress} tried to transfer SOL FROM treasury`
-            );
-            return NextResponse.json(
-              { error: "Cannot transfer SOL from treasury" },
-              { status: 403 }
-            );
-          }
+    // ── 9. MUST HAVE AT LEAST ONE SHADOWSPACE INSTRUCTION ──
+    const hasShadowspace = tx.instructions.some(
+      (ix: any) => ix.programId.toBase58() === SHADOWSPACE_PROGRAM_ID.toBase58()
+    );
+    if (!hasShadowspace) {
+      console.error(`🚨 BLOCKED: No Shadowspace instruction from ${walletAddress}`);
+      return NextResponse.json({ error: "Must include Shadowspace instruction" }, { status: 403 });
+    }
+
+    // ── 10. BLOCK ALL SYSTEMPROG INSTRUCTIONS WHERE TREASURY IS SOURCE ──
+    // Types: 0=CreateAccount, 2=Transfer, 3=CreateAccountWithSeed, 12=TransferWithSeed
+    // ALL of these transfer lamports from the first account (source).
+    // We block ANY SystemProgram instruction where treasury is a writable signer.
+    for (const ix of tx.instructions) {
+      if (ix.programId.equals(SystemProgram.programId)) {
+        // Check if treasury is the FIRST key (source/funder) on any SystemProgram ix
+        const firstKey = ix.keys[0];
+        if (firstKey && firstKey.pubkey.equals(treasury.publicKey) && firstKey.isWritable) {
+          const ixType = ix.data.length >= 4 ? ix.data.readUInt32LE(0) : -1;
+          console.error(`🚨 BLOCKED: SystemProgram type ${ixType} with treasury as source from ${walletAddress}`);
+          return NextResponse.json({ error: "Treasury cannot be source on SystemProgram" }, { status: 403 });
         }
       }
     }
 
-    // Limit number of instructions to prevent abuse
-    if (tx.instructions.length > 10) {
-      return NextResponse.json(
-        { error: "Transaction has too many instructions" },
-        { status: 400 }
-      );
-    }
-
-    // CRITICAL: At least one instruction MUST call the Shadowspace program.
-    // This prevents abuse where someone crafts a tx using only SystemProgram
-    // or other allowed helper programs to drain the treasury.
-    const hasShadowspaceInstruction = tx.instructions.some(
-      (ix: any) => ix.programId.toBase58() === SHADOWSPACE_PROGRAM_ID.toBase58()
-    );
-    if (!hasShadowspaceInstruction) {
-      console.error(
-        `🚨 BLOCKED: Wallet ${walletAddress} sent tx with NO Shadowspace instruction — programs: ${allProgramIds}`
-      );
-      return NextResponse.json(
-        { error: "Transaction must include a Shadowspace program instruction" },
-        { status: 403 }
-      );
-    }
-
-    // Add treasury signature
+    // ── 11. SIGN & SEND ──
     tx.partialSign(treasury);
-
-    // Send the fully-signed transaction
     const sig = await connection.sendRawTransaction(tx.serialize());
     await connection.confirmTransaction(sig, "confirmed");
 
-    // Update rate limit
-    recent.push(now);
-    txTimestamps.set(walletAddress, recent);
-
-    console.log(
-      `🎟️ Sponsored tx for ${walletAddress.slice(0, 8)}... — sig: ${sig.slice(0, 16)}...`
-    );
-
+    console.log(`🎟️ Sponsored: ${walletAddress.slice(0, 8)}.. | ${sig.slice(0, 16)}.. | IP: ${clientIp}`);
     return NextResponse.json({ success: true, signature: sig });
   } catch (err: any) {
     console.error("Sponsor tx error:", err);
-    return NextResponse.json(
-      { error: err?.message || "Internal error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err?.message || "Internal error" }, { status: 500 });
   }
 }

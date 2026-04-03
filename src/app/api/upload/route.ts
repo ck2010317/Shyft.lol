@@ -28,8 +28,7 @@ export async function POST(request: NextRequest) {
     const origin = request.headers.get("origin") || "";
     const referer = request.headers.get("referer") || "";
     const allowed = (origin && ALLOWED_ORIGINS.has(origin))
-      || [...ALLOWED_ORIGINS].some(o => referer.startsWith(o))
-      || (!origin && !referer);
+      || [...ALLOWED_ORIGINS].some(o => referer.startsWith(o));
     if (!allowed) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }

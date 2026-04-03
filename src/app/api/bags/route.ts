@@ -44,7 +44,7 @@ function isAllowedOrigin(req: NextRequest): boolean {
   for (const allowed of ALLOWED_ORIGINS) {
     if (referer.startsWith(allowed)) return true;
   }
-  if (!origin && !referer) return true; // internal server-side calls
+  // NO FALLBACK — deny if both origin and referer are missing
   return false;
 }
 
