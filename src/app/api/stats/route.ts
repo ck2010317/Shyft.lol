@@ -8,13 +8,13 @@ import { Connection, PublicKey } from "@solana/web3.js";
  */
 
 const PROGRAM_ID = new PublicKey("EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ");
-const RPC_URL = process.env.HELIUS_MAINNET_RPC || `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE || process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
+const RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE}`;
 
 // Anchor account discriminators as base58 (first 8 bytes of SHA256("account:<Name>"))
 const DISCRIMINATORS: Record<string, string> = {
   Profile:  "XqtBdGS7oVD",
   Post:     "2SCFvsZq1W5",
-  Follow:   "eJ5PtCerHZU",
+  Follow:   "WDkFKLBZQjJ",   // account:FollowAccount
   Reaction: "eqoxdQG2hzA",
   Comment:  "SBKTEqMLuVa",
   Chat:     "VSNktsnZqf6",
@@ -53,8 +53,9 @@ async function fetchStats(): Promise<Record<string, number>> {
     if (result.status === "fulfilled") {
       stats[result.value.name] = result.value.count;
     } else {
-      // On error, use cached value or 0
+      // Log the error so we can see what's going wrong
       const name = entries[results.indexOf(result)][0];
+      console.error(`Stats fetch failed for ${name}:`, result.reason?.message || result.reason);
       stats[name] = cache?.data[name] || 0;
     }
   }

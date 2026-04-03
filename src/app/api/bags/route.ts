@@ -11,7 +11,7 @@ import { BagsSDK } from "@bagsfm/bags-sdk";
 
 const BAGS_API_KEY = (process.env.BAGS_API_KEY || "").trim();
 // Bags operates on Solana mainnet — use Helius mainnet RPC
-const BAGS_RPC_URL = process.env.BAGS_MAINNET_RPC_URL || process.env.HELIUS_MAINNET_RPC || `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE || process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
+const BAGS_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE}`;
 // Bags partner config — read from env vars (server-side only)
 const BAGS_PARTNER_WALLET = (process.env.BAGS_PARTNER_WALLET || "").trim();
 const BAGS_PARTNER_CONFIG_PDA = (process.env.BAGS_PARTNER_CONFIG_PDA || "").trim();
@@ -165,7 +165,7 @@ export async function GET(req: NextRequest) {
         }
 
         // 4) For any mints that are still bare (not in feed), enrich via Helius DAS API
-        const heliusUrl = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE || process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
+        const heliusUrl = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE}`;
         const results = Array.from(tokenMap.values());
         const enriched = await Promise.all(
           results.map(async (token) => {

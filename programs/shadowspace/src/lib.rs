@@ -135,6 +135,8 @@ pub mod shadowspace {
         reaction_type: u8,
     ) -> Result<()> {
         let reaction = &mut ctx.accounts.reaction;
+        // Prevent re-initialization — post field is zero only on fresh accounts
+        require!(reaction.post == Pubkey::default(), ShadowError::AlreadyInitialized);
         reaction.post = ctx.accounts.post.key();
         reaction.user = ctx.accounts.reactor_profile.owner;
         reaction.reaction_type = reaction_type;

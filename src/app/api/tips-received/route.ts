@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const HELIUS_API_KEY = process.env.HELIUS_API_KEY_PRIVATE || process.env.NEXT_PUBLIC_HELIUS_API_KEY;
+const HELIUS_API_KEY = process.env.HELIUS_API_KEY_PRIVATE;
 
 /**
  * GET /api/tips-received?wallet=<address>

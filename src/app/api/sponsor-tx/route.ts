@@ -57,7 +57,7 @@ function getTreasuryKeypair(): Keypair {
 }
 
 // Shadowspace on-chain program is on mainnet
-const RPC_URL = process.env.HELIUS_MAINNET_RPC || `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE || process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
+const RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE}`;
 
 // Rate limiting — per IP AND per wallet, 5 per minute each
 const ipTimestamps = new Map<string, number[]>();
