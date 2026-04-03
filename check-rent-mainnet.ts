@@ -12,19 +12,26 @@ async function main() {
   const fullAccounts = await connection.getProgramAccounts(PROGRAM_ID);
 
   const sizeToType: Record<number, string> = {
-    315: 'Profile',
-    269: 'Post',
-    192: 'Comment',
-    73: 'Reaction',
-    72: 'Follow',
-    429: 'Profile (old)',
+    // Current schema (8-byte discriminator + struct LEN)
+    443: 'Profile',        // 8 + 435
+    569: 'Post',            // 8 + 561
+    192: 'Comment',         // 8 + 184
+    73: 'Reaction',         // 8 + 65
+    72: 'Follow',           // 8 + 64
+    96: 'Chat',             // 8 + 88
+    589: 'Message',         // 8 + 581
+    360: 'Community',       // 8 + 352
+    80: 'Membership',       // 8 + 72
+    // Old schema sizes (pre-optimization accounts still on chain)
+    315: 'Profile (old)',
+    269: 'Post (old)',
+    429: 'Profile (old v2)',
     853: 'Profile (old lg)',
-    577: 'Post (old)',
+    577: 'Post (old v2)',
     232: 'Comment (old)',
     81: 'Reaction (old)',
-    80: 'Follow (old)',
-    96: 'Chat',
-    589: 'Message',
+    // 4392 = IDL account
+    4392: 'IDL Account',
   };
 
   const categories: Record<string, { count: number; totalRent: number; size: number }> = {};

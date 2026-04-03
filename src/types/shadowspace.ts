@@ -705,6 +705,9 @@ export type Shadowspace = {
         },
         {
           "name": "author",
+          "docs": [
+            "The commenter — must be the commenter_profile owner"
+          ],
           "writable": true,
           "signer": true
         },
@@ -895,6 +898,9 @@ export type Shadowspace = {
         },
         {
           "name": "author",
+          "docs": [
+            "The post author — must be the profile owner"
+          ],
           "writable": true,
           "signer": true
         },
@@ -1641,6 +1647,9 @@ export type Shadowspace = {
         },
         {
           "name": "sender",
+          "docs": [
+            "Message sender — must be a participant in the chat"
+          ],
           "writable": true,
           "signer": true
         },

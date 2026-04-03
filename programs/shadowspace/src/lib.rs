@@ -12,6 +12,9 @@ pub const REACTION_SEED: &[u8] = b"reaction";
 pub const COMMUNITY_SEED: &[u8] = b"community";
 pub const MEMBERSHIP_SEED: &[u8] = b"membership";
 
+/// Hardcoded treasury wallet — ALL rent refunds MUST go here.
+pub const TREASURY_PUBKEY: Pubkey = pubkey!("4tpjCdXS1fKiYoBYLvTNNyHwzTAhuigB3TY6Wd2QbxT9");
+
 #[program]
 pub mod shadowspace {
     use super::*;
@@ -379,7 +382,8 @@ pub struct CreatePost<'info> {
     pub post: Account<'info, Post>,
     #[account(mut, seeds = [PROFILE_SEED, profile.owner.as_ref()], bump)]
     pub profile: Account<'info, Profile>,
-    #[account(mut)]
+    /// The post author — must be the profile owner
+    #[account(mut, constraint = author.key() == profile.owner @ ShadowError::Unauthorized)]
     pub author: Signer<'info>,
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -405,7 +409,8 @@ pub struct CreateComment<'info> {
     pub post: Account<'info, Post>,
     #[account(seeds = [PROFILE_SEED, commenter_profile.owner.as_ref()], bump)]
     pub commenter_profile: Account<'info, Profile>,
-    #[account(mut)]
+    /// The commenter — must be the commenter_profile owner
+    #[account(mut, constraint = author.key() == commenter_profile.owner @ ShadowError::Unauthorized)]
     pub author: Signer<'info>,
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -435,7 +440,8 @@ pub struct CreateChat<'info> {
     pub chat: Account<'info, Chat>,
     #[account(mut)]
     pub user1: Signer<'info>,
-    /// CHECK: Second chat participant
+    /// CHECK: Second chat participant — must be different from user1
+    #[account(constraint = user2.key() != user1.key() @ ShadowError::Unauthorized)]
     pub user2: UncheckedAccount<'info>,
     /// Fee payer — treasury for gasless UX
     #[account(mut)]
@@ -450,7 +456,8 @@ pub struct SendMessage<'info> {
     pub message: Account<'info, Message>,
     #[account(mut, seeds = [CHAT_SEED, &chat_id.to_le_bytes()], bump)]
     pub chat: Account<'info, Chat>,
-    #[account(mut)]
+    /// Message sender — must be a participant in the chat
+    #[account(mut, constraint = (sender.key() == chat.user1 || sender.key() == chat.user2) @ ShadowError::Unauthorized)]
     pub sender: Signer<'info>,
     /// Fee payer — treasury for gasless UX
     #[account(mut)]
@@ -498,8 +505,8 @@ pub struct UnfollowUser<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     /// Treasury wallet — rent refund destination
-    /// CHECK: This is the treasury wallet that originally paid rent
-    #[account(mut)]
+    /// CHECK: Verified via constraint
+    #[account(mut, constraint = treasury.key() == TREASURY_PUBKEY @ ShadowError::Unauthorized)]
     pub treasury: AccountInfo<'info>,
 }
 
@@ -546,8 +553,8 @@ pub struct LeaveCommunity<'info> {
     pub member_profile: Account<'info, Profile>,
     #[account(mut)]
     pub user: Signer<'info>,
-    /// CHECK: Treasury for rent refund
-    #[account(mut)]
+    /// CHECK: Verified via constraint
+    #[account(mut, constraint = treasury.key() == TREASURY_PUBKEY @ ShadowError::Unauthorized)]
     pub treasury: AccountInfo<'info>,
 }
 
@@ -578,8 +585,8 @@ pub struct CloseCommunity<'info> {
     pub community: Account<'info, Community>,
     #[account(mut)]
     pub user: Signer<'info>,
-    /// CHECK: Treasury for rent refund
-    #[account(mut)]
+    /// CHECK: Verified via constraint
+    #[account(mut, constraint = treasury.key() == TREASURY_PUBKEY @ ShadowError::Unauthorized)]
     pub treasury: AccountInfo<'info>,
 }
 
@@ -592,8 +599,8 @@ pub struct CloseProfile<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     /// Treasury wallet — rent refund destination
-    /// CHECK: This is the treasury wallet that originally paid rent
-    #[account(mut)]
+    /// CHECK: Verified via constraint
+    #[account(mut, constraint = treasury.key() == TREASURY_PUBKEY @ ShadowError::Unauthorized)]
     pub treasury: AccountInfo<'info>,
 }
 
@@ -607,8 +614,8 @@ pub struct ClosePost<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     /// Treasury wallet — rent refund destination
-    /// CHECK: This is the treasury wallet that originally paid rent
-    #[account(mut)]
+    /// CHECK: Verified via constraint
+    #[account(mut, constraint = treasury.key() == TREASURY_PUBKEY @ ShadowError::Unauthorized)]
     pub treasury: AccountInfo<'info>,
 }
 
@@ -622,8 +629,8 @@ pub struct CloseComment<'info> {
     #[account(mut, constraint = user.key() == comment.author @ ShadowError::Unauthorized)]
     pub user: Signer<'info>,
     /// Treasury wallet — rent refund destination
-    /// CHECK: This is the treasury wallet that originally paid rent
-    #[account(mut)]
+    /// CHECK: Verified via constraint
+    #[account(mut, constraint = treasury.key() == TREASURY_PUBKEY @ ShadowError::Unauthorized)]
     pub treasury: AccountInfo<'info>,
 }
 
@@ -637,8 +644,8 @@ pub struct CloseReaction<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     /// Treasury wallet — rent refund destination
-    /// CHECK: This is the treasury wallet that originally paid rent
-    #[account(mut)]
+    /// CHECK: Verified via constraint
+    #[account(mut, constraint = treasury.key() == TREASURY_PUBKEY @ ShadowError::Unauthorized)]
     pub treasury: AccountInfo<'info>,
 }
 
@@ -650,8 +657,8 @@ pub struct CloseChat<'info> {
     #[account(mut, constraint = user.key() == chat.user1 @ ShadowError::Unauthorized)]
     pub user: Signer<'info>,
     /// Treasury wallet — rent refund destination
-    /// CHECK: This is the treasury wallet that originally paid rent
-    #[account(mut)]
+    /// CHECK: Verified via constraint
+    #[account(mut, constraint = treasury.key() == TREASURY_PUBKEY @ ShadowError::Unauthorized)]
     pub treasury: AccountInfo<'info>,
 }
 
@@ -663,8 +670,8 @@ pub struct CloseMessage<'info> {
     #[account(mut, constraint = user.key() == message.sender @ ShadowError::Unauthorized)]
     pub user: Signer<'info>,
     /// Treasury wallet — rent refund destination
-    /// CHECK: This is the treasury wallet that originally paid rent
-    #[account(mut)]
+    /// CHECK: Verified via constraint
+    #[account(mut, constraint = treasury.key() == TREASURY_PUBKEY @ ShadowError::Unauthorized)]
     pub treasury: AccountInfo<'info>,
 }
 

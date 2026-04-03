@@ -225,8 +225,43 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── 11. SIGN & SEND ──
+    // ── 11. SIMULATE TX — detect CPI rent drain ──
+    // Anchor's init_if_needed does an inner CPI to SystemProgram::CreateAccount
+    // with treasury as payer. This is invisible to our top-level instruction checks.
+    // Simulation catches this: if treasury loses more than the tx fee, REJECT.
     tx.partialSign(treasury);
+    try {
+      const simResult = await connection.simulateTransaction(tx);
+      if (simResult.value.err) {
+        console.error(`🚨 Simulation failed for ${walletAddress}:`, JSON.stringify(simResult.value.err));
+        return NextResponse.json({ error: "Transaction simulation failed" }, { status: 400 });
+      }
+
+      // Check treasury balance change via pre/post balances
+      const accountKeys = tx.compileMessage().accountKeys.map((k) => k.toBase58());
+      const treasuryIdx = accountKeys.indexOf(treasury.publicKey.toBase58());
+      if (treasuryIdx !== -1 && simResult.value.accounts) {
+        const postAccount = simResult.value.accounts[treasuryIdx];
+        if (postAccount) {
+          const postBalance = postAccount.lamports;
+          const balanceDrop = treasuryBalance - postBalance;
+          // Allow up to 0.01 SOL per tx for rent + fees (normal creates cost ~0.005 SOL)
+          // Single account create: ~0.005 SOL rent + 0.000005 fee
+          // Double (e.g. create_chat + send_message): ~0.01 SOL
+          const MAX_ALLOWED_DROP = 15_000_000; // 0.015 SOL — generous for 2-3 accounts per tx
+          if (balanceDrop > MAX_ALLOWED_DROP) {
+            console.error(`🚨 BLOCKED: Treasury would lose ${balanceDrop / 1e9} SOL (max ${MAX_ALLOWED_DROP / 1e9}) from ${walletAddress}`);
+            return NextResponse.json({ error: "Transaction would drain treasury" }, { status: 403 });
+          }
+        }
+      }
+    } catch (simErr: any) {
+      console.error(`⚠️ Simulation error for ${walletAddress}:`, simErr?.message);
+      // On simulation failure, block to be safe
+      return NextResponse.json({ error: "Transaction simulation error" }, { status: 400 });
+    }
+
+    // ── 12. SEND (already signed) ──
     const sig = await connection.sendRawTransaction(tx.serialize());
     await connection.confirmTransaction(sig, "confirmed");
 
