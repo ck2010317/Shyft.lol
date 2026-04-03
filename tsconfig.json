@@ -41,6 +41,7 @@
     "test-*.js",
     "test-p2p/**",
     "check-balance.ts",
+    "check-rent-mainnet.ts",
     "close-chat.ts",
     "nuke-chat.ts",
     "programs/**",
