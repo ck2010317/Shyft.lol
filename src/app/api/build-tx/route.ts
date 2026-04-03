@@ -1,0 +1,511 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+  SystemProgram,
+} from "@solana/web3.js";
+import { Program, AnchorProvider, Idl, BN } from "@coral-xyz/anchor";
+import idl from "@/lib/idl.json";
+
+/**
+ * /api/build-tx — Server builds the ENTIRE transaction from action + params.
+ *
+ * Flow:
+ *   Client sends { action, params, walletAddress }
+ *   → Server builds the Anchor instruction (using IDL + accounts)
+ *   → Server sets fresh blockhash
+ *   → Treasury signs as fee payer
+ *   → Returns partially-signed tx to client
+ *   → Client co-signs with user wallet + sends to Solana
+ *
+ * The client NEVER builds instructions — the server controls what goes in the tx.
+ */
+
+const PROGRAM_ID = new PublicKey("EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ");
+const RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE}`;
+
+// ========== PDA Seeds ==========
+const PROFILE_SEED = Buffer.from("profile");
+const POST_SEED = Buffer.from("post");
+const CHAT_SEED = Buffer.from("chat");
+const MESSAGE_SEED = Buffer.from("message");
+const FOLLOW_SEED = Buffer.from("follow");
+const COMMENT_SEED = Buffer.from("comment");
+const REACTION_SEED = Buffer.from("reaction");
+const COMMUNITY_SEED = Buffer.from("community");
+const MEMBERSHIP_SEED = Buffer.from("membership");
+
+function toLEBytes(num: number): Uint8Array {
+  const buffer = new ArrayBuffer(8);
+  const view = new DataView(buffer);
+  view.setBigUint64(0, BigInt(num), true);
+  return new Uint8Array(buffer);
+}
+
+// ========== PDA Derivation ==========
+function getProfilePda(owner: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([PROFILE_SEED, owner.toBuffer()], PROGRAM_ID);
+}
+function getPostPda(author: PublicKey, postId: number): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([POST_SEED, author.toBuffer(), toLEBytes(postId)], PROGRAM_ID);
+}
+function getChatPda(chatId: number): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([CHAT_SEED, toLEBytes(chatId)], PROGRAM_ID);
+}
+function getMessagePda(chatId: number, messageIndex: number): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([MESSAGE_SEED, toLEBytes(chatId), toLEBytes(messageIndex)], PROGRAM_ID);
+}
+function getFollowPda(follower: PublicKey, following: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([FOLLOW_SEED, follower.toBuffer(), following.toBuffer()], PROGRAM_ID);
+}
+function getCommentPda(postPda: PublicKey, commentIndex: number): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([COMMENT_SEED, postPda.toBuffer(), toLEBytes(commentIndex)], PROGRAM_ID);
+}
+function getReactionPda(postPda: PublicKey, user: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([REACTION_SEED, postPda.toBuffer(), user.toBuffer()], PROGRAM_ID);
+}
+function getCommunityPda(communityId: number): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([COMMUNITY_SEED, toLEBytes(communityId)], PROGRAM_ID);
+}
+function getMembershipPda(communityPda: PublicKey, member: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([MEMBERSHIP_SEED, communityPda.toBuffer(), member.toBuffer()], PROGRAM_ID);
+}
+
+// ========== Treasury ==========
+function getTreasuryKeypair(): Keypair {
+  const secret = process.env.TREASURY_PRIVATE_KEY;
+  if (!secret) throw new Error("TREASURY_PRIVATE_KEY not set");
+  if (secret.trimStart().startsWith("[")) {
+    const bytes = JSON.parse(secret) as number[];
+    return Keypair.fromSecretKey(new Uint8Array(bytes));
+  }
+  const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  const str = secret.trim();
+  const bytes: number[] = [0];
+  for (const char of str) {
+    let carry = ALPHABET.indexOf(char);
+    for (let j = 0; j < bytes.length; j++) {
+      carry += bytes[j] * 58;
+      bytes[j] = carry & 0xff;
+      carry >>= 8;
+    }
+    while (carry > 0) { bytes.push(carry & 0xff); carry >>= 8; }
+  }
+  for (let i = 0; i < str.length && str[i] === "1"; i++) bytes.push(0);
+  return Keypair.fromSecretKey(new Uint8Array(bytes.reverse()));
+}
+
+// ========== Rate Limiting ==========
+const ipTimestamps = new Map<string, number[]>();
+const walletTimestamps = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 5;
+const MIN_TREASURY_RESERVE = 100_000_000; // 0.1 SOL
+
+function getClientIp(request: NextRequest): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown"
+  );
+}
+
+function isRateLimited(key: string, store: Map<string, number[]>): boolean {
+  const now = Date.now();
+  const timestamps = (store.get(key) || []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  store.set(key, timestamps);
+  if (timestamps.length >= RATE_LIMIT_MAX) return true;
+  timestamps.push(now);
+  store.set(key, timestamps);
+  return false;
+}
+
+const ALLOWED_ORIGINS = new Set([
+  "https://www.shyft.lol",
+  "https://shyft.lol",
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3099",
+]);
+
+function isAllowedOrigin(request: NextRequest): boolean {
+  const origin = request.headers.get("origin") || "";
+  const referer = request.headers.get("referer") || "";
+  if (origin && ALLOWED_ORIGINS.has(origin)) return true;
+  for (const allowed of ALLOWED_ORIGINS) {
+    if (referer.startsWith(allowed)) return true;
+  }
+  return false;
+}
+
+// ========== Anchor Setup ==========
+/** Dummy wallet for server-side Anchor Provider (treasury signs, not this) */
+class ServerWallet {
+  constructor(public payer: Keypair) {}
+  get publicKey() { return this.payer.publicKey; }
+  async signTransaction<T extends Transaction>(tx: T): Promise<T> {
+    (tx as any).partialSign(this.payer);
+    return tx;
+  }
+  async signAllTransactions<T extends Transaction>(txs: T[]): Promise<T[]> {
+    return txs.map((tx) => { (tx as any).partialSign(this.payer); return tx; });
+  }
+}
+
+function getProgram(connection: Connection, treasury: Keypair): Program {
+  const wallet = new ServerWallet(treasury);
+  const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
+  return new Program(idl as Idl, provider);
+}
+
+// ========== Action Handlers ==========
+// Each handler takes params + user pubkey + program, returns an instruction
+
+type ActionHandler = (
+  params: any,
+  user: PublicKey,
+  treasury: PublicKey,
+  program: Program
+) => Promise<any>;
+
+const actions: Record<string, ActionHandler> = {
+
+  // ── PROFILE ──
+  async createProfile(params, user, treasury, program) {
+    const { username, displayName, bio } = params;
+    if (!username || typeof username !== "string") throw new Error("Missing username");
+    const [profilePda] = getProfilePda(user);
+    return program.methods
+      .createProfile(username, displayName || "", bio || "")
+      .accounts({ profile: profilePda, user, payer: treasury, systemProgram: SystemProgram.programId })
+      .instruction();
+  },
+
+  async migrateProfile(params, user, treasury, program) {
+    const [profilePda] = getProfilePda(user);
+    return program.methods
+      .migrateProfile()
+      .accounts({ profile: profilePda, user, systemProgram: SystemProgram.programId })
+      .instruction();
+  },
+
+  async updateProfile(params, user, treasury, program) {
+    const { displayName, bio, avatarUrl, bannerUrl } = params;
+    const [profilePda] = getProfilePda(user);
+    return program.methods
+      .updateProfile(displayName || "", bio || "", avatarUrl || "", bannerUrl || "")
+      .accounts({ profile: profilePda, user, payer: treasury, systemProgram: SystemProgram.programId })
+      .instruction();
+  },
+
+  async closeProfile(params, user, treasury, program) {
+    const [profilePda] = getProfilePda(user);
+    return program.methods
+      .closeProfile()
+      .accounts({ profile: profilePda, user, treasury })
+      .instruction();
+  },
+
+  // ── POSTS ──
+  async createPost(params, user, treasury, program) {
+    const { postId, content, isPrivate } = params;
+    if (postId === undefined) throw new Error("Missing postId");
+    if (!content) throw new Error("Missing content");
+    const [profilePda] = getProfilePda(user);
+    const [postPda] = getPostPda(user, postId);
+    return program.methods
+      .createPost(new BN(postId), content, !!isPrivate)
+      .accountsPartial({ post: postPda, profile: profilePda, author: user, payer: treasury, systemProgram: SystemProgram.programId })
+      .instruction();
+  },
+
+  async closePost(params, user, treasury, program) {
+    const { postId } = params;
+    if (postId === undefined) throw new Error("Missing postId");
+    const [profilePda] = getProfilePda(user);
+    const [postPda] = getPostPda(user, postId);
+    return program.methods
+      .closePost(new BN(postId))
+      .accountsPartial({ post: postPda, profile: profilePda, user, treasury })
+      .instruction();
+  },
+
+  async likePost(params, user, treasury, program) {
+    const { author, postId } = params;
+    if (!author || postId === undefined) throw new Error("Missing author or postId");
+    const authorPk = new PublicKey(author);
+    const [postPda] = getPostPda(authorPk, postId);
+    const [profilePda] = getProfilePda(user);
+    return program.methods
+      .likePost(new BN(postId))
+      .accountsPartial({ post: postPda, profile: profilePda, user })
+      .instruction();
+  },
+
+  // ── COMMENTS ──
+  async createComment(params, user, treasury, program) {
+    const { author, postId, commentIndex, content } = params;
+    if (!author || postId === undefined || commentIndex === undefined || !content) throw new Error("Missing params");
+    const authorPk = new PublicKey(author);
+    const [postPda] = getPostPda(authorPk, postId);
+    const [commentPda] = getCommentPda(postPda, commentIndex);
+    const [commenterProfilePda] = getProfilePda(user);
+    return program.methods
+      .createComment(new BN(postId), new BN(commentIndex), content)
+      .accountsPartial({ comment: commentPda, post: postPda, commenterProfile: commenterProfilePda, author: user, payer: treasury, systemProgram: SystemProgram.programId })
+      .instruction();
+  },
+
+  async closeComment(params, user, treasury, program) {
+    const { postAuthor, postId, commentIndex } = params;
+    if (!postAuthor || postId === undefined || commentIndex === undefined) throw new Error("Missing params");
+    const postAuthorPk = new PublicKey(postAuthor);
+    const [postPda] = getPostPda(postAuthorPk, postId);
+    const [commentPda] = getCommentPda(postPda, commentIndex);
+    return program.methods
+      .closeComment(new BN(postId), new BN(commentIndex))
+      .accountsPartial({ comment: commentPda, post: postPda, user, treasury })
+      .instruction();
+  },
+
+  // ── REACTIONS ──
+  async reactToPost(params, user, treasury, program) {
+    const { author, postId, reactionType } = params;
+    if (!author || postId === undefined || reactionType === undefined) throw new Error("Missing params");
+    const authorPk = new PublicKey(author);
+    const [postPda] = getPostPda(authorPk, postId);
+    const [reactionPda] = getReactionPda(postPda, user);
+    const [reactorProfilePda] = getProfilePda(user);
+    return program.methods
+      .reactToPost(new BN(postId), reactionType)
+      .accountsPartial({ reaction: reactionPda, post: postPda, reactorProfile: reactorProfilePda, user, payer: treasury, systemProgram: SystemProgram.programId })
+      .instruction();
+  },
+
+  async closeReaction(params, user, treasury, program) {
+    const { author, postId } = params;
+    if (!author || postId === undefined) throw new Error("Missing params");
+    const authorPk = new PublicKey(author);
+    const [postPda] = getPostPda(authorPk, postId);
+    const [reactionPda] = getReactionPda(postPda, user);
+    return program.methods
+      .closeReaction(new BN(postId))
+      .accountsPartial({ reaction: reactionPda, post: postPda, user, treasury })
+      .instruction();
+  },
+
+  // ── CHAT ──
+  async createChat(params, user, treasury, program) {
+    const { chatId, user2 } = params;
+    if (chatId === undefined || !user2) throw new Error("Missing chatId or user2");
+    const [chatPda] = getChatPda(chatId);
+    return program.methods
+      .createChat(new BN(chatId))
+      .accounts({ chat: chatPda, user1: user, user2: new PublicKey(user2), payer: treasury, systemProgram: SystemProgram.programId })
+      .instruction();
+  },
+
+  async sendMessage(params, user, treasury, program) {
+    const { chatId, messageIndex, content, isPayment, paymentAmount } = params;
+    if (chatId === undefined || messageIndex === undefined || !content) throw new Error("Missing params");
+    const [messagePda] = getMessagePda(chatId, messageIndex);
+    const [chatPda] = getChatPda(chatId);
+    return program.methods
+      .sendMessage(new BN(chatId), new BN(messageIndex), content, !!isPayment, new BN(paymentAmount || 0))
+      .accounts({ message: messagePda, chat: chatPda, sender: user, payer: treasury, systemProgram: SystemProgram.programId })
+      .instruction();
+  },
+
+  async closeChat(params, user, treasury, program) {
+    const { chatId } = params;
+    if (chatId === undefined) throw new Error("Missing chatId");
+    const [chatPda] = getChatPda(chatId);
+    return program.methods
+      .closeChat(new BN(chatId))
+      .accounts({ chat: chatPda, user, treasury })
+      .instruction();
+  },
+
+  async closeMessage(params, user, treasury, program) {
+    const { chatId, messageIndex } = params;
+    if (chatId === undefined || messageIndex === undefined) throw new Error("Missing params");
+    const [messagePda] = getMessagePda(chatId, messageIndex);
+    return program.methods
+      .closeMessage(new BN(chatId), new BN(messageIndex))
+      .accounts({ message: messagePda, user, treasury })
+      .instruction();
+  },
+
+  // ── FOLLOW ──
+  async followUser(params, user, treasury, program) {
+    const { target } = params;
+    if (!target) throw new Error("Missing target");
+    const targetPk = new PublicKey(target);
+    const [followerProfilePda] = getProfilePda(user);
+    const [followingProfilePda] = getProfilePda(targetPk);
+    const [followPda] = getFollowPda(user, targetPk);
+    return program.methods
+      .followUser()
+      .accounts({ followAccount: followPda, followerProfile: followerProfilePda, followingProfile: followingProfilePda, user, payer: treasury, systemProgram: SystemProgram.programId })
+      .instruction();
+  },
+
+  async unfollowUser(params, user, treasury, program) {
+    const { target } = params;
+    if (!target) throw new Error("Missing target");
+    const targetPk = new PublicKey(target);
+    const [followerProfilePda] = getProfilePda(user);
+    const [followingProfilePda] = getProfilePda(targetPk);
+    const [followPda] = getFollowPda(user, targetPk);
+    return program.methods
+      .unfollowUser()
+      .accounts({ followAccount: followPda, followerProfile: followerProfilePda, followingProfile: followingProfilePda, user, treasury })
+      .instruction();
+  },
+
+  // ── COMMUNITIES ──
+  async createCommunity(params, user, treasury, program) {
+    const { communityId, name, description, avatarUrl } = params;
+    if (communityId === undefined || !name) throw new Error("Missing params");
+    const [communityPda] = getCommunityPda(communityId);
+    const [creatorProfilePda] = getProfilePda(user);
+    return program.methods
+      .createCommunity(new BN(communityId), name, description || "", avatarUrl || "")
+      .accounts({ community: communityPda, creatorProfile: creatorProfilePda, user, payer: treasury, systemProgram: SystemProgram.programId })
+      .instruction();
+  },
+
+  async joinCommunity(params, user, treasury, program) {
+    const { communityId } = params;
+    if (communityId === undefined) throw new Error("Missing communityId");
+    const [communityPda] = getCommunityPda(communityId);
+    const [memberProfilePda] = getProfilePda(user);
+    const [membershipPda] = getMembershipPda(communityPda, user);
+    return program.methods
+      .joinCommunity(new BN(communityId))
+      .accounts({ membership: membershipPda, community: communityPda, memberProfile: memberProfilePda, user, payer: treasury, systemProgram: SystemProgram.programId })
+      .instruction();
+  },
+
+  async leaveCommunity(params, user, treasury, program) {
+    const { communityId } = params;
+    if (communityId === undefined) throw new Error("Missing communityId");
+    const [communityPda] = getCommunityPda(communityId);
+    const [memberProfilePda] = getProfilePda(user);
+    const [membershipPda] = getMembershipPda(communityPda, user);
+    return program.methods
+      .leaveCommunity(new BN(communityId))
+      .accounts({ membership: membershipPda, community: communityPda, memberProfile: memberProfilePda, user, treasury })
+      .instruction();
+  },
+
+  async closeCommunity(params, user, treasury, program) {
+    const { communityId } = params;
+    if (communityId === undefined) throw new Error("Missing communityId");
+    const [communityPda] = getCommunityPda(communityId);
+    return program.methods
+      .closeCommunity(new BN(communityId))
+      .accounts({ community: communityPda, user, treasury })
+      .instruction();
+  },
+};
+
+// ========== GET — returns treasury pubkey ==========
+let cachedTreasuryPubkey: string | null = null;
+
+export async function GET() {
+  try {
+    if (!cachedTreasuryPubkey) {
+      cachedTreasuryPubkey = getTreasuryKeypair().publicKey.toBase58();
+    }
+    return NextResponse.json({ treasuryPubkey: cachedTreasuryPubkey });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message }, { status: 500 });
+  }
+}
+
+// ========== POST — build + treasury-sign tx ==========
+export async function POST(request: NextRequest) {
+  try {
+    // ── 1. ORIGIN CHECK ──
+    if (!isAllowedOrigin(request)) {
+      console.error(`🚨 BLOCKED origin: ${request.headers.get("origin")} | ref: ${request.headers.get("referer")}`);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { action, params, walletAddress } = body;
+
+    if (!action || !walletAddress) {
+      return NextResponse.json({ error: "Missing action or walletAddress" }, { status: 400 });
+    }
+
+    // ── 2. VALIDATE ACTION EXISTS ──
+    const handler = actions[action];
+    if (!handler) {
+      console.error(`🚨 BLOCKED: Unknown action "${action}" from ${walletAddress}`);
+      return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    }
+
+    let userPubkey: PublicKey;
+    try {
+      userPubkey = new PublicKey(walletAddress);
+    } catch {
+      return NextResponse.json({ error: "Invalid walletAddress" }, { status: 400 });
+    }
+
+    // ── 3. RATE LIMIT ──
+    const clientIp = getClientIp(request);
+    if (isRateLimited(clientIp, ipTimestamps)) {
+      return NextResponse.json({ error: "Rate limited" }, { status: 429 });
+    }
+    if (isRateLimited(walletAddress, walletTimestamps)) {
+      return NextResponse.json({ error: "Rate limited" }, { status: 429 });
+    }
+
+    const connection = new Connection(RPC_URL, "confirmed");
+    const treasury = getTreasuryKeypair();
+
+    // ── 4. TREASURY BALANCE CHECK ──
+    const treasuryBalance = await connection.getBalance(treasury.publicKey);
+    if (treasuryBalance < MIN_TREASURY_RESERVE) {
+      console.error("⚠️ Treasury low:", treasuryBalance / 1e9, "SOL");
+      return NextResponse.json({ error: "Platform treasury low" }, { status: 503 });
+    }
+
+    // ── 5. BUILD THE INSTRUCTION — server controls everything ──
+    const program = getProgram(connection, treasury);
+    let ix;
+    try {
+      ix = await handler(params || {}, userPubkey, treasury.publicKey, program);
+    } catch (err: any) {
+      console.error(`❌ Build failed for action "${action}":`, err?.message);
+      return NextResponse.json({ error: err?.message || "Failed to build instruction" }, { status: 400 });
+    }
+
+    // ── 6. BUILD TX ──
+    const tx = new Transaction().add(ix);
+    tx.feePayer = treasury.publicKey;
+
+    // ── 7. FRESH BLOCKHASH ──
+    const { blockhash } = await connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = blockhash;
+
+    // ── 8. TREASURY SIGNS — locks the exact bytes ──
+    tx.partialSign(treasury);
+
+    // ── 9. RETURN partially-signed tx ──
+    const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+
+    console.log(`🔨 Built "${action}" for ${walletAddress.slice(0, 8)}.. | IP: ${clientIp}`);
+    return NextResponse.json({
+      success: true,
+      transaction: serialized.toString("base64"),
+    });
+  } catch (err: any) {
+    console.error("Build tx error:", err);
+    return NextResponse.json({ error: err?.message || "Internal error" }, { status: 500 });
+  }
+}

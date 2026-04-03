@@ -1,5 +1,5 @@
-import { Program, AnchorProvider, Idl, BN, BorshCoder } from "@coral-xyz/anchor";
-import { Connection, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import { Program, AnchorProvider, Idl, BorshCoder } from "@coral-xyz/anchor";
+import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import idl from "./idl.json";
 import {
   encryptMessage as naclEncrypt,
@@ -102,13 +102,13 @@ export function clearRpcCache(): void {
 
 // ========== Treasury Sponsorship ==========
 
-/** Cached treasury public key (fetched once from /api/sponsor-tx) */
+/** Cached treasury public key (fetched once from /api/build-tx) */
 let _treasuryPubkey: PublicKey | null = null;
 
 /** Get the platform treasury public key (fee payer for sponsored txs) */
 export async function getTreasuryPubkey(): Promise<PublicKey> {
   if (_treasuryPubkey) return _treasuryPubkey;
-  const res = await fetch("/api/sponsor-tx");
+  const res = await fetch("/api/build-tx");
   const data = await res.json();
   if (!data.treasuryPubkey) throw new Error("Could not fetch treasury pubkey");
   _treasuryPubkey = new PublicKey(data.treasuryPubkey);
@@ -117,47 +117,43 @@ export async function getTreasuryPubkey(): Promise<PublicKey> {
 
 /**
  * Server-build-tx pattern:
- * 1. Client builds unsigned tx (feePayer = treasury, NO user signature)
- * 2. Server validates, sets fresh blockhash, treasury signs → returns partially-signed tx
+ * 1. Client sends action name + params to /api/build-tx
+ * 2. Server builds the ENTIRE instruction, sets blockhash, treasury signs
  * 3. Client deserializes, user co-signs, sends directly to Solana
  *
- * Security: Treasury signature locks the exact bytes. If the client changes
- * anything after treasury signs, the treasury signature becomes invalid → Solana rejects.
+ * The client NEVER builds instructions — only the server does.
+ * Treasury signature locks the exact bytes — any tampering invalidates the tx.
  */
-export async function sponsorAndSend(
-  tx: Transaction,
+export async function requestServerTx(
+  action: string,
+  params: Record<string, any>,
   wallet: { signTransaction(tx: Transaction): Promise<Transaction>; publicKey: PublicKey },
-  connection: Connection,
-  walletAddress: string
+  connection: Connection
 ): Promise<string> {
-  // Debug: log all program IDs in the transaction before sending
-  console.log("📋 sponsor-tx: programs in transaction:", tx.instructions.map(ix => ix.programId.toBase58()));
+  const walletAddress = wallet.publicKey.toBase58();
+  console.log(`📋 build-tx: action="${action}" wallet=${walletAddress.slice(0, 8)}..`);
 
-  // Step 1: Send UNSIGNED tx to server (just instructions + feePayer, no signatures needed)
-  const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
-  const res = await fetch("/api/sponsor-tx", {
+  // Step 1: Ask server to build + treasury-sign the tx
+  const res = await fetch("/api/build-tx", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      transaction: serialized.toString("base64"),
-      walletAddress,
-    }),
+    body: JSON.stringify({ action, params, walletAddress }),
   });
   const data = await res.json();
   if (!data.success) {
-    console.error("❌ sponsor-tx failed:", data.error);
-    throw new Error(data.error || "Sponsor transaction failed");
+    console.error(`❌ build-tx failed for "${action}":`, data.error);
+    throw new Error(data.error || "Build transaction failed");
   }
 
   // Step 2: Deserialize the treasury-signed tx
   const treasurySigned = Transaction.from(Buffer.from(data.transaction, "base64"));
 
-  // Step 3: User co-signs (wallet popup) — this adds the user's signature
+  // Step 3: User co-signs (wallet popup)
   const fullySigned = await wallet.signTransaction(treasurySigned);
 
-  // Step 4: Send directly to Solana — no more server in the loop
+  // Step 4: Send directly to Solana
   const sig = await connection.sendRawTransaction(fullySigned.serialize());
-  console.log("✅ Tx sent to Solana:", sig.slice(0, 16) + "...");
+  console.log(`✅ "${action}" sent to Solana:`, sig.slice(0, 16) + "...");
 
   return sig;
 }
@@ -260,46 +256,13 @@ export class ShyftClient {
       // ignore — account may not exist yet
     }
 
-    // Use treasury as payer so user never needs SOL
-    const treasury = await getTreasuryPubkey();
-
-    const ix = await this.program.methods
-      .createProfile(username, displayName, bio)
-      .accounts({
-        profile: profilePda,
-        user,
-        payer: treasury,
-        systemProgram: SystemProgram.programId,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-
-    // Server signs with treasury (locks tx), then user co-signs + sends to Solana
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
+    // Server builds tx, treasury signs, user co-signs + sends to Solana
+    const sig = await requestServerTx("createProfile", { username, displayName, bio }, this.provider.wallet, this.provider.connection);
     return sig;
   }
 
   async migrateProfile(): Promise<string> {
-    const user = this.provider.wallet.publicKey;
-    const [profilePda] = getProfilePda(user);
-    const treasury = await getTreasuryPubkey();
-
-    const ix = await this.program.methods
-      .migrateProfile()
-      .accounts({
-        profile: profilePda,
-        user,
-        systemProgram: SystemProgram.programId,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-
-    // Server signs with treasury, then user co-signs + sends to Solana
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
+    const sig = await requestServerTx("migrateProfile", {}, this.provider.wallet, this.provider.connection);
     return sig;
   }
 
@@ -349,7 +312,6 @@ export class ShyftClient {
   async updateProfile(displayName: string, bio: string, avatarUrl: string, bannerUrl: string): Promise<string> {
     const user = this.provider.wallet.publicKey;
     const [profilePda] = getProfilePda(user);
-    const treasury = await getTreasuryPubkey();
 
     // Auto-migrate profile if account is undersized (e.g. avatar/banner fields grew)
     try {
@@ -367,19 +329,7 @@ export class ShyftClient {
     const compressedAvatar = compressIpfsUrl(avatarUrl);
     const compressedBanner = compressIpfsUrl(bannerUrl);
 
-    const ix = await this.program.methods
-      .updateProfile(displayName, bio, compressedAvatar, compressedBanner)
-      .accounts({
-        profile: profilePda,
-        user,
-        payer: treasury,
-        systemProgram: SystemProgram.programId,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
+    const sig = await requestServerTx("updateProfile", { displayName, bio, avatarUrl: compressedAvatar, bannerUrl: compressedBanner }, this.provider.wallet, this.provider.connection);
     
     rpcCache.invalidate("profile_" + user.toBase58());
     return sig;
@@ -398,23 +348,7 @@ export class ShyftClient {
     console.log("Post ID:", postId);
 
     try {
-      const treasury = await getTreasuryPubkey();
-      const [profilePda] = getProfilePda(wallet);
-      const [postPda] = getPostPda(wallet, postId);
-
-      const ix = await this.program.methods
-        .createPost(new BN(postId), content, isPrivate)
-        .accountsPartial({
-          profile: profilePda,
-          author: wallet,
-          payer: treasury,
-          systemProgram: SystemProgram.programId,
-        })
-        .instruction();
-
-      const tx = new Transaction().add(ix);
-      tx.feePayer = treasury;
-      const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
+      const sig = await requestServerTx("createPost", { postId, content, isPrivate }, this.provider.wallet, this.provider.connection);
 
       console.log("Post created (treasury sponsored):", sig);
       rpcCache.invalidate("allPosts");
@@ -443,23 +377,7 @@ export class ShyftClient {
     console.log("Post ID:", postId);
 
     try {
-      const treasury = await getTreasuryPubkey();
-      const [profilePda] = getProfilePda(wallet);
-      const [postPda] = getPostPda(wallet, postId);
-
-      const ix = await this.program.methods
-        .closePost(new BN(postId))
-        .accountsPartial({
-          post: postPda,
-          profile: profilePda,
-          user: wallet,
-          treasury,
-        })
-        .instruction();
-
-      const tx = new Transaction().add(ix);
-      tx.feePayer = treasury;
-      const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
+      const sig = await requestServerTx("closePost", { postId }, this.provider.wallet, this.provider.connection);
 
       console.log("Post deleted (rent refunded to treasury on-chain):", sig);
       rpcCache.invalidate("allPosts");
@@ -562,80 +480,21 @@ export class ShyftClient {
   }
 
   async likePost(author: PublicKey, postId: number): Promise<string> {
-    const [postPda] = getPostPda(author, postId);
-    const wallet = this.provider.wallet.publicKey;
-    const [profilePda] = getProfilePda(wallet);
-
-    const treasury = await getTreasuryPubkey();
-
-    const ix = await this.program.methods
-      .likePost(new BN(postId))
-      .accountsPartial({
-        post: postPda,
-        profile: profilePda,
-        user: wallet,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
+    const sig = await requestServerTx("likePost", { author: author.toBase58(), postId }, this.provider.wallet, this.provider.connection);
     return sig;
   }
 
   // ========== COMMENTS ==========
 
   async createComment(author: PublicKey, postId: number, commentIndex: number, content: string): Promise<string> {
-    const [postPda] = getPostPda(author, postId);
-    const [commentPda] = getCommentPda(postPda, commentIndex);
-    const wallet = this.provider.wallet.publicKey;
-    const [commenterProfilePda] = getProfilePda(wallet);
-
-    const treasury = await getTreasuryPubkey();
-
-    const ix = await this.program.methods
-      .createComment(new BN(postId), new BN(commentIndex), content)
-      .accountsPartial({
-        comment: commentPda,
-        post: postPda,
-        commenterProfile: commenterProfilePda,
-        author: wallet,
-        payer: treasury,
-        systemProgram: SystemProgram.programId,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
-
+    const sig = await requestServerTx("createComment", { author: author.toBase58(), postId, commentIndex, content }, this.provider.wallet, this.provider.connection);
     rpcCache.invalidate("allComments");
     rpcCache.invalidate("allPosts");
     return sig;
   }
 
   async deleteComment(postAuthor: PublicKey, postId: number, commentIndex: number): Promise<string> {
-    const wallet = this.provider.wallet.publicKey;
-    if (!wallet) throw new Error("Wallet not connected");
-
-    const treasury = await getTreasuryPubkey();
-    const [postPda] = getPostPda(postAuthor, postId);
-    const [commentPda] = getCommentPda(postPda, commentIndex);
-
-    const ix = await this.program.methods
-      .closeComment(new BN(postId), new BN(commentIndex))
-      .accountsPartial({
-        comment: commentPda,
-        post: postPda,
-        user: wallet,
-        treasury,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
-
+    const sig = await requestServerTx("closeComment", { postAuthor: postAuthor.toBase58(), postId, commentIndex }, this.provider.wallet, this.provider.connection);
     console.log("Comment deleted (rent refunded to treasury on-chain):", sig);
     rpcCache.invalidate("allComments");
     rpcCache.invalidate("allPosts");
@@ -675,55 +534,13 @@ export class ShyftClient {
   // ========== REACTIONS ==========
 
   async reactToPost(author: PublicKey, postId: number, reactionType: number): Promise<string> {
-    const wallet = this.provider.wallet.publicKey;
-    const [postPda] = getPostPda(author, postId);
-    const [reactionPda] = getReactionPda(postPda, wallet);
-    const [reactorProfilePda] = getProfilePda(wallet);
-
-    const treasury = await getTreasuryPubkey();
-
-    const ix = await this.program.methods
-      .reactToPost(new BN(postId), reactionType)
-      .accountsPartial({
-        reaction: reactionPda,
-        post: postPda,
-        reactorProfile: reactorProfilePda,
-        user: wallet,
-        payer: treasury,
-        systemProgram: SystemProgram.programId,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
-
+    const sig = await requestServerTx("reactToPost", { author: author.toBase58(), postId, reactionType }, this.provider.wallet, this.provider.connection);
     rpcCache.invalidate("allReactions");
     return sig;
   }
 
   async removeReaction(author: PublicKey, postId: number): Promise<string> {
-    const wallet = this.provider.wallet.publicKey;
-    if (!wallet) throw new Error("Wallet not connected");
-
-    const treasury = await getTreasuryPubkey();
-    const [postPda] = getPostPda(author, postId);
-    const [reactionPda] = getReactionPda(postPda, wallet);
-
-    const ix = await this.program.methods
-      .closeReaction(new BN(postId))
-      .accountsPartial({
-        reaction: reactionPda,
-        post: postPda,
-        user: wallet,
-        treasury,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
-
+    const sig = await requestServerTx("closeReaction", { author: author.toBase58(), postId }, this.provider.wallet, this.provider.connection);
     console.log("Reaction removed (rent refunded to treasury on-chain):", sig);
     rpcCache.invalidate("allReactions");
     return sig;
@@ -758,24 +575,7 @@ export class ShyftClient {
   // ========== CHAT ==========
 
   async createChat(chatId: number, user2: PublicKey): Promise<string> {
-    const user1 = this.provider.wallet.publicKey;
-    const [chatPda] = getChatPda(chatId);
-    const treasury = await getTreasuryPubkey();
-
-    const ix = await this.program.methods
-      .createChat(new BN(chatId))
-      .accounts({
-        chat: chatPda,
-        user1,
-        user2,
-        payer: treasury,
-        systemProgram: SystemProgram.programId,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user1.toBase58());
+    const sig = await requestServerTx("createChat", { chatId, user2: user2.toBase58() }, this.provider.wallet, this.provider.connection);
     return sig;
   }
 
@@ -786,26 +586,7 @@ export class ShyftClient {
     isPayment: boolean = false,
     paymentAmount: number = 0
   ): Promise<string> {
-    const sender = this.provider.wallet.publicKey;
-    const [messagePda] = getMessagePda(chatId, messageIndex);
-    const [chatPda] = getChatPda(chatId);
-
-    // Step 1: Send the message on-chain (treasury-sponsored)
-    const treasury = await getTreasuryPubkey();
-    const ix = await this.program.methods
-      .sendMessage(new BN(chatId), new BN(messageIndex), content, isPayment, new BN(paymentAmount))
-      .accounts({
-        message: messagePda,
-        chat: chatPda,
-        sender,
-        payer: treasury,
-        systemProgram: SystemProgram.programId,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, sender.toBase58());
+    const sig = await requestServerTx("sendMessage", { chatId, messageIndex, content, isPayment, paymentAmount }, this.provider.wallet, this.provider.connection);
     console.log("✅ Message sent on-chain (treasury sponsored):", sig);
 
     // Invalidate message caches after sending
@@ -1022,26 +803,7 @@ export class ShyftClient {
     isPayment: boolean = false,
     paymentAmount: number = 0
   ): Promise<string> {
-    const sender = this.provider.wallet.publicKey;
-    const [messagePda] = getMessagePda(chatId, messageIndex);
-    const [chatPda] = getChatPda(chatId);
-
-    // Treasury-sponsored: user doesn't pay gas
-    const treasury = await getTreasuryPubkey();
-    const ix = await this.program.methods
-      .sendMessage(new BN(chatId), new BN(messageIndex), content, isPayment, new BN(paymentAmount))
-      .accounts({
-        message: messagePda,
-        chat: chatPda,
-        sender,
-        payer: treasury,
-        systemProgram: SystemProgram.programId,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, sender.toBase58());
+    const sig = await requestServerTx("sendMessage", { chatId, messageIndex, content, isPayment, paymentAmount }, this.provider.wallet, this.provider.connection);
 
     // Wait for confirmation so on-chain state is readable immediately
     await this.provider.connection.confirmTransaction(sig, "confirmed");
@@ -1270,52 +1032,13 @@ export class ShyftClient {
   // ========== FOLLOW ==========
 
   async followUser(targetPubkey: PublicKey): Promise<string> {
-    const user = this.provider.wallet.publicKey;
-    const [followerProfilePda] = getProfilePda(user);
-    const [followingProfilePda] = getProfilePda(targetPubkey);
-    const [followPda] = getFollowPda(user, targetPubkey);
-    const treasury = await getTreasuryPubkey();
-
-    const ix = await this.program.methods
-      .followUser()
-      .accounts({
-        followAccount: followPda,
-        followerProfile: followerProfilePda,
-        followingProfile: followingProfilePda,
-        user,
-        payer: treasury,
-        systemProgram: SystemProgram.programId,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
+    const sig = await requestServerTx("followUser", { target: targetPubkey.toBase58() }, this.provider.wallet, this.provider.connection);
     rpcCache.invalidate("allFollows");
     return sig;
   }
 
   async unfollowUser(targetPubkey: PublicKey): Promise<string> {
-    const user = this.provider.wallet.publicKey;
-    const [followerProfilePda] = getProfilePda(user);
-    const [followingProfilePda] = getProfilePda(targetPubkey);
-    const [followPda] = getFollowPda(user, targetPubkey);
-    const treasury = await getTreasuryPubkey();
-
-    const ix = await this.program.methods
-      .unfollowUser()
-      .accounts({
-        followAccount: followPda,
-        followerProfile: followerProfilePda,
-        followingProfile: followingProfilePda,
-        user,
-        treasury,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
+    const sig = await requestServerTx("unfollowUser", { target: targetPubkey.toBase58() }, this.provider.wallet, this.provider.connection);
     console.log("Unfollowed (rent refunded to treasury on-chain):", sig);
     rpcCache.invalidate("allFollows");
     return sig;
@@ -1385,77 +1108,20 @@ export class ShyftClient {
   // ========== COMMUNITIES ==========
 
   async createCommunity(communityId: number, name: string, description: string, avatarUrl: string): Promise<string> {
-    const user = this.provider.wallet.publicKey;
-    const [communityPda] = getCommunityPda(communityId);
-    const [creatorProfilePda] = getProfilePda(user);
-    const treasury = await getTreasuryPubkey();
-
-    const ix = await this.program.methods
-      .createCommunity(new BN(communityId), name, description, compressIpfsUrl(avatarUrl))
-      .accounts({
-        community: communityPda,
-        creatorProfile: creatorProfilePda,
-        user,
-        payer: treasury,
-        systemProgram: SystemProgram.programId,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
+    const sig = await requestServerTx("createCommunity", { communityId, name, description, avatarUrl: compressIpfsUrl(avatarUrl) }, this.provider.wallet, this.provider.connection);
     rpcCache.invalidate("allCommunities");
     return sig;
   }
 
   async joinCommunity(communityId: number): Promise<string> {
-    const user = this.provider.wallet.publicKey;
-    const [communityPda] = getCommunityPda(communityId);
-    const [memberProfilePda] = getProfilePda(user);
-    const [membershipPda] = getMembershipPda(communityPda, user);
-    const treasury = await getTreasuryPubkey();
-
-    const ix = await this.program.methods
-      .joinCommunity(new BN(communityId))
-      .accounts({
-        membership: membershipPda,
-        community: communityPda,
-        memberProfile: memberProfilePda,
-        user,
-        payer: treasury,
-        systemProgram: SystemProgram.programId,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
+    const sig = await requestServerTx("joinCommunity", { communityId }, this.provider.wallet, this.provider.connection);
     rpcCache.invalidate("allCommunities");
     rpcCache.invalidate("allMemberships");
     return sig;
   }
 
   async leaveCommunity(communityId: number): Promise<string> {
-    const user = this.provider.wallet.publicKey;
-    const [communityPda] = getCommunityPda(communityId);
-    const [memberProfilePda] = getProfilePda(user);
-    const [membershipPda] = getMembershipPda(communityPda, user);
-    const treasury = await getTreasuryPubkey();
-
-    const ix = await this.program.methods
-      .leaveCommunity(new BN(communityId))
-      .accounts({
-        membership: membershipPda,
-        community: communityPda,
-        memberProfile: memberProfilePda,
-        user,
-        treasury,
-      })
-      .instruction();
-
-    const tx = new Transaction().add(ix);
-    tx.feePayer = treasury;
-    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
+    const sig = await requestServerTx("leaveCommunity", { communityId }, this.provider.wallet, this.provider.connection);
     rpcCache.invalidate("allCommunities");
     rpcCache.invalidate("allMemberships");
     return sig;
