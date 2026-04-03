@@ -120,7 +120,10 @@ function isAllowedOrigin(request: NextRequest): boolean {
   return false;
 }
 
-/** POST — accepts a partially-signed tx (base64), adds treasury signature, sends it */
+/** POST — accepts an unsigned tx (base64), treasury signs it, returns the partially-signed tx.
+ *  The user signs + submits to Solana themselves.
+ *  Because the server builds the treasury signature over the EXACT bytes,
+ *  any modification by the client invalidates the signature → Solana rejects. */
 export async function POST(request: NextRequest) {
   try {
     // ── 1. ORIGIN CHECK (strict — no empty fallback) ──
@@ -176,51 +179,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Fee payer must be treasury" }, { status: 400 });
     }
 
-    // ── 6. VERIFY walletAddress IS A SIGNER ON THE TX ──
-    const txSigners = tx.signatures
-      .filter((s) => s.signature !== null || s.publicKey.equals(walletPubkey))
-      .map((s) => s.publicKey.toBase58());
-    if (!txSigners.includes(walletAddress)) {
-      console.error(`🚨 BLOCKED: walletAddress ${walletAddress} is not a signer on the tx`);
-      return NextResponse.json({ error: "Wallet must be a signer" }, { status: 403 });
-    }
-
-    // ── 7. INSTRUCTION LIMIT ──
+    // ── 6. INSTRUCTION LIMIT ──
     if (tx.instructions.length > 6) {
       return NextResponse.json({ error: "Too many instructions" }, { status: 400 });
     }
 
-    // ── 7b. BLOCK HIGH PRIORITY FEES ──
-    // Attacker can set insane ComputeUnitPrice to drain treasury via tx fees.
-    // ComputeBudget SetComputeUnitPrice has type byte = 3.
-    // ComputeBudget SetComputeUnitLimit has type byte = 2.
-    const COMPUTE_BUDGET_ID = "ComputeBudget111111111111111111111111111111";
-    const MAX_COMPUTE_UNIT_PRICE = 1_000; // 1000 microlamports — plenty for priority, max fee ~0.0004 SOL/tx
-    const MAX_COMPUTE_UNITS = 200_000; // enough for any single Shadowspace instruction
-    for (const ix of tx.instructions) {
-      if (ix.programId.toBase58() === COMPUTE_BUDGET_ID && ix.data.length >= 1) {
-        const ixType = ix.data[0];
-        if (ixType === 3 && ix.data.length >= 9) {
-          // SetComputeUnitPrice — 8-byte LE u64 at offset 1
-          const price = ix.data.readBigUInt64LE(1);
-          if (price > BigInt(MAX_COMPUTE_UNIT_PRICE)) {
-            console.error(`🚨 BLOCKED: ComputeUnitPrice ${price} from ${walletAddress}`);
-            return NextResponse.json({ error: "Compute unit price too high" }, { status: 403 });
-          }
-        }
-        if (ixType === 2 && ix.data.length >= 5) {
-          // SetComputeUnitLimit — 4-byte LE u32 at offset 1
-          const units = ix.data.readUInt32LE(1);
-          if (units > MAX_COMPUTE_UNITS) {
-            console.error(`🚨 BLOCKED: ComputeUnitLimit ${units} from ${walletAddress}`);
-            return NextResponse.json({ error: "Compute unit limit too high" }, { status: 403 });
-          }
-        }
-      }
-    }
-
-    // ── 8. VALIDATE ALL PROGRAMS ──
-    const allProgramIds = tx.instructions.map((ix: any) => ix.programId.toBase58());
+    // ── 7. VALIDATE ALL PROGRAMS — defense in depth ──
     for (const ix of tx.instructions) {
       const programId = ix.programId.toBase58();
       if (!ALLOWED_PROGRAMS.has(programId)) {
@@ -229,7 +193,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── 9. MUST HAVE AT LEAST ONE SHADOWSPACE INSTRUCTION ──
+    // ── 8. MUST HAVE AT LEAST ONE SHADOWSPACE INSTRUCTION ──
     const hasShadowspace = tx.instructions.some(
       (ix: any) => ix.programId.toBase58() === SHADOWSPACE_PROGRAM_ID.toBase58()
     );
@@ -238,13 +202,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Must include Shadowspace instruction" }, { status: 403 });
     }
 
-    // ── 10. BLOCK ALL SYSTEMPROG INSTRUCTIONS WHERE TREASURY IS SOURCE ──
-    // Types: 0=CreateAccount, 2=Transfer, 3=CreateAccountWithSeed, 12=TransferWithSeed
-    // ALL of these transfer lamports from the first account (source).
-    // We block ANY SystemProgram instruction where treasury is a writable signer.
+    // ── 9. BLOCK COMPUTEBUDGET — server controls fees, not the client ──
+    const COMPUTE_BUDGET_ID = "ComputeBudget111111111111111111111111111111";
+    for (const ix of tx.instructions) {
+      if (ix.programId.toBase58() === COMPUTE_BUDGET_ID) {
+        console.error(`🚨 BLOCKED: ComputeBudget instruction from ${walletAddress}`);
+        return NextResponse.json({ error: "ComputeBudget not allowed" }, { status: 403 });
+      }
+    }
+
+    // ── 10. BLOCK SYSTEMPROG WHERE TREASURY IS SOURCE ──
     for (const ix of tx.instructions) {
       if (ix.programId.equals(SystemProgram.programId)) {
-        // Check if treasury is the FIRST key (source/funder) on any SystemProgram ix
         const firstKey = ix.keys[0];
         if (firstKey && firstKey.pubkey.equals(treasury.publicKey) && firstKey.isWritable) {
           const ixType = ix.data.length >= 4 ? ix.data.readUInt32LE(0) : -1;
@@ -254,48 +223,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── 11. SIMULATE TX — detect CPI rent drain ──
-    // Anchor's init_if_needed does an inner CPI to SystemProgram::CreateAccount
-    // with treasury as payer. This is invisible to our top-level instruction checks.
-    // Simulation catches this: if treasury loses more than the tx fee, REJECT.
+    // ── 11. FRESH BLOCKHASH — server sets this so client can't replay stale txs ──
+    const { blockhash } = await connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = blockhash;
+
+    // ── 12. TREASURY SIGNS — this locks the tx contents cryptographically ──
+    // Any byte change by the client after this invalidates the signature.
     tx.partialSign(treasury);
-    try {
-      const simResult = await connection.simulateTransaction(tx);
-      if (simResult.value.err) {
-        console.error(`🚨 Simulation failed for ${walletAddress}:`, JSON.stringify(simResult.value.err));
-        return NextResponse.json({ error: "Transaction simulation failed" }, { status: 400 });
-      }
 
-      // Check treasury balance change via pre/post balances
-      const accountKeys = tx.compileMessage().accountKeys.map((k) => k.toBase58());
-      const treasuryIdx = accountKeys.indexOf(treasury.publicKey.toBase58());
-      if (treasuryIdx !== -1 && simResult.value.accounts) {
-        const postAccount = simResult.value.accounts[treasuryIdx];
-        if (postAccount) {
-          const postBalance = postAccount.lamports;
-          const balanceDrop = treasuryBalance - postBalance;
-          // Allow up to 0.01 SOL per tx for rent + fees (normal creates cost ~0.005 SOL)
-          // Single account create: ~0.005 SOL rent + 0.000005 fee
-          // Double (e.g. create_chat + send_message): ~0.01 SOL
-          const MAX_ALLOWED_DROP = 15_000_000; // 0.015 SOL — generous for 2-3 accounts per tx
-          if (balanceDrop > MAX_ALLOWED_DROP) {
-            console.error(`🚨 BLOCKED: Treasury would lose ${balanceDrop / 1e9} SOL (max ${MAX_ALLOWED_DROP / 1e9}) from ${walletAddress}`);
-            return NextResponse.json({ error: "Transaction would drain treasury" }, { status: 403 });
-          }
-        }
-      }
-    } catch (simErr: any) {
-      console.error(`⚠️ Simulation error for ${walletAddress}:`, simErr?.message);
-      // On simulation failure, block to be safe
-      return NextResponse.json({ error: "Transaction simulation error" }, { status: 400 });
-    }
+    // ── 13. RETURN the treasury-signed tx for the client to co-sign + submit ──
+    const signedTx = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
 
-    // ── 12. SEND (already signed) ──
-    const sig = await connection.sendRawTransaction(tx.serialize());
-    await connection.confirmTransaction(sig, "confirmed");
-
-    console.log(`🎟️ Sponsored: ${walletAddress.slice(0, 8)}.. | ${sig.slice(0, 16)}.. | IP: ${clientIp}`);
-    return NextResponse.json({ success: true, signature: sig });
+    console.log(`🎟️ Signed for: ${walletAddress.slice(0, 8)}.. | IP: ${clientIp}`);
+    return NextResponse.json({
+      success: true,
+      transaction: signedTx.toString("base64"),
+    });
   } catch (err: any) {
     console.error("Sponsor tx error:", err);
     return NextResponse.json({ error: err?.message || "Internal error" }, { status: 500 });

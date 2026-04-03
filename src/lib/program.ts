@@ -116,13 +116,24 @@ export async function getTreasuryPubkey(): Promise<PublicKey> {
 }
 
 /**
- * Send a partially-signed transaction to the backend for treasury co-signing + submission.
- * The tx must have feePayer = treasury. The user/session key signs first, then backend adds treasury sig.
+ * Server-build-tx pattern:
+ * 1. Client builds unsigned tx (feePayer = treasury, NO user signature)
+ * 2. Server validates, sets fresh blockhash, treasury signs → returns partially-signed tx
+ * 3. Client deserializes, user co-signs, sends directly to Solana
+ *
+ * Security: Treasury signature locks the exact bytes. If the client changes
+ * anything after treasury signs, the treasury signature becomes invalid → Solana rejects.
  */
-export async function sponsorTransaction(tx: Transaction, walletAddress: string): Promise<string> {
+export async function sponsorAndSend(
+  tx: Transaction,
+  wallet: { signTransaction(tx: Transaction): Promise<Transaction>; publicKey: PublicKey },
+  connection: Connection,
+  walletAddress: string
+): Promise<string> {
   // Debug: log all program IDs in the transaction before sending
   console.log("📋 sponsor-tx: programs in transaction:", tx.instructions.map(ix => ix.programId.toBase58()));
 
+  // Step 1: Send UNSIGNED tx to server (just instructions + feePayer, no signatures needed)
   const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
   const res = await fetch("/api/sponsor-tx", {
     method: "POST",
@@ -137,7 +148,18 @@ export async function sponsorTransaction(tx: Transaction, walletAddress: string)
     console.error("❌ sponsor-tx failed:", data.error);
     throw new Error(data.error || "Sponsor transaction failed");
   }
-  return data.signature;
+
+  // Step 2: Deserialize the treasury-signed tx
+  const treasurySigned = Transaction.from(Buffer.from(data.transaction, "base64"));
+
+  // Step 3: User co-signs (wallet popup) — this adds the user's signature
+  const fullySigned = await wallet.signTransaction(treasurySigned);
+
+  // Step 4: Send directly to Solana — no more server in the loop
+  const sig = await connection.sendRawTransaction(fullySigned.serialize());
+  console.log("✅ Tx sent to Solana:", sig.slice(0, 16) + "...");
+
+  return sig;
 }
 
 // ========== Helpers ==========
@@ -253,13 +275,9 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
 
-    // User signs (wallet popup) — they are the 'user' signer, not the payer
-    const signed = await this.provider.wallet.signTransaction(tx);
-
-    // Send to backend for treasury co-signature + submission
-    const sig = await sponsorTransaction(signed, user.toBase58());
+    // Server signs with treasury (locks tx), then user co-signs + sends to Solana
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
     return sig;
   }
 
@@ -279,13 +297,9 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
 
-    // User signs
-    const signedTx = await this.provider.wallet.signTransaction(tx);
-
-    // Treasury co-signs and sends
-    const sig = await sponsorTransaction(signedTx, user.toBase58());
+    // Server signs with treasury, then user co-signs + sends to Solana
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
     return sig;
   }
 
@@ -365,9 +379,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, user.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
     
     rpcCache.invalidate("profile_" + user.toBase58());
     return sig;
@@ -402,9 +414,7 @@ export class ShyftClient {
 
       const tx = new Transaction().add(ix);
       tx.feePayer = treasury;
-      tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-      const signed = await this.provider.wallet.signTransaction(tx);
-      const sig = await sponsorTransaction(signed, wallet.toBase58());
+      const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
 
       console.log("Post created (treasury sponsored):", sig);
       rpcCache.invalidate("allPosts");
@@ -449,9 +459,7 @@ export class ShyftClient {
 
       const tx = new Transaction().add(ix);
       tx.feePayer = treasury;
-      tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-      const signed = await this.provider.wallet.signTransaction(tx);
-      const sig = await sponsorTransaction(signed, wallet.toBase58());
+      const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
 
       console.log("Post deleted (rent refunded to treasury on-chain):", sig);
       rpcCache.invalidate("allPosts");
@@ -571,9 +579,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, wallet.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
     return sig;
   }
 
@@ -601,9 +607,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, wallet.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
 
     rpcCache.invalidate("allComments");
     rpcCache.invalidate("allPosts");
@@ -630,9 +634,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, wallet.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
 
     console.log("Comment deleted (rent refunded to treasury on-chain):", sig);
     rpcCache.invalidate("allComments");
@@ -694,9 +696,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, wallet.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
 
     rpcCache.invalidate("allReactions");
     return sig;
@@ -722,9 +722,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, wallet.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, wallet.toBase58());
 
     console.log("Reaction removed (rent refunded to treasury on-chain):", sig);
     rpcCache.invalidate("allReactions");
@@ -777,9 +775,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, user1.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user1.toBase58());
     return sig;
   }
 
@@ -809,9 +805,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, sender.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, sender.toBase58());
     console.log("✅ Message sent on-chain (treasury sponsored):", sig);
 
     // Invalidate message caches after sending
@@ -1047,9 +1041,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, sender.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, sender.toBase58());
 
     // Wait for confirmation so on-chain state is readable immediately
     await this.provider.connection.confirmTransaction(sig, "confirmed");
@@ -1298,9 +1290,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, user.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
     rpcCache.invalidate("allFollows");
     return sig;
   }
@@ -1325,9 +1315,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, user.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
     console.log("Unfollowed (rent refunded to treasury on-chain):", sig);
     rpcCache.invalidate("allFollows");
     return sig;
@@ -1415,9 +1403,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, user.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
     rpcCache.invalidate("allCommunities");
     return sig;
   }
@@ -1443,9 +1429,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, user.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
     rpcCache.invalidate("allCommunities");
     rpcCache.invalidate("allMemberships");
     return sig;
@@ -1471,9 +1455,7 @@ export class ShyftClient {
 
     const tx = new Transaction().add(ix);
     tx.feePayer = treasury;
-    tx.recentBlockhash = (await this.provider.connection.getLatestBlockhash()).blockhash;
-    const signed = await this.provider.wallet.signTransaction(tx);
-    const sig = await sponsorTransaction(signed, user.toBase58());
+    const sig = await sponsorAndSend(tx, this.provider.wallet, this.provider.connection, user.toBase58());
     rpcCache.invalidate("allCommunities");
     rpcCache.invalidate("allMemberships");
     return sig;
