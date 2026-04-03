@@ -57,7 +57,7 @@ function getTreasuryKeypair(): Keypair {
 }
 
 // Shadowspace on-chain program is on mainnet
-const RPC_URL = process.env.HELIUS_MAINNET_RPC || `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
+const RPC_URL = process.env.HELIUS_MAINNET_RPC || `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE || process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
 
 // Rate limiting — per IP AND per wallet, 5 per minute each
 const ipTimestamps = new Map<string, number[]>();
@@ -188,6 +188,35 @@ export async function POST(request: NextRequest) {
     // ── 7. INSTRUCTION LIMIT ──
     if (tx.instructions.length > 6) {
       return NextResponse.json({ error: "Too many instructions" }, { status: 400 });
+    }
+
+    // ── 7b. BLOCK HIGH PRIORITY FEES ──
+    // Attacker can set insane ComputeUnitPrice to drain treasury via tx fees.
+    // ComputeBudget SetComputeUnitPrice has type byte = 3.
+    // ComputeBudget SetComputeUnitLimit has type byte = 2.
+    const COMPUTE_BUDGET_ID = "ComputeBudget111111111111111111111111111111";
+    const MAX_COMPUTE_UNIT_PRICE = 100_000; // 0.0001 SOL per CU — more than enough for priority
+    const MAX_COMPUTE_UNITS = 400_000; // standard limit
+    for (const ix of tx.instructions) {
+      if (ix.programId.toBase58() === COMPUTE_BUDGET_ID && ix.data.length >= 1) {
+        const ixType = ix.data[0];
+        if (ixType === 3 && ix.data.length >= 9) {
+          // SetComputeUnitPrice — 8-byte LE u64 at offset 1
+          const price = ix.data.readBigUInt64LE(1);
+          if (price > BigInt(MAX_COMPUTE_UNIT_PRICE)) {
+            console.error(`🚨 BLOCKED: ComputeUnitPrice ${price} from ${walletAddress}`);
+            return NextResponse.json({ error: "Compute unit price too high" }, { status: 403 });
+          }
+        }
+        if (ixType === 2 && ix.data.length >= 5) {
+          // SetComputeUnitLimit — 4-byte LE u32 at offset 1
+          const units = ix.data.readUInt32LE(1);
+          if (units > MAX_COMPUTE_UNITS) {
+            console.error(`🚨 BLOCKED: ComputeUnitLimit ${units} from ${walletAddress}`);
+            return NextResponse.json({ error: "Compute unit limit too high" }, { status: 403 });
+          }
+        }
+      }
     }
 
     // ── 8. VALIDATE ALL PROGRAMS ──

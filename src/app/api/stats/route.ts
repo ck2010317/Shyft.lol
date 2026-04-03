@@ -8,7 +8,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
  */
 
 const PROGRAM_ID = new PublicKey("EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ");
-const RPC_URL = process.env.HELIUS_MAINNET_RPC || `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
+const RPC_URL = process.env.HELIUS_MAINNET_RPC || `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE || process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
 
 // Anchor account discriminators as base58 (first 8 bytes of SHA256("account:<Name>"))
 const DISCRIMINATORS: Record<string, string> = {

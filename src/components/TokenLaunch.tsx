@@ -110,10 +110,7 @@ export default function TokenLaunch({ onClose, onSuccess, username }: TokenLaunc
       // Step 2: Create fee share config + launch tx, then batch sign
       setStep("launching");
 
-      const connection = new Connection(
-        `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
-        "confirmed"
-      );
+      const connection = new Connection("/api/rpc", "confirmed");
 
       // Create fee share config (returns unsigned txs)
       const configRes = await fetch("/api/bags", {

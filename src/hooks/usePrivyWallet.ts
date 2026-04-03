@@ -10,9 +10,13 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useWallets as usePrivyWallets } from "@privy-io/react-auth/solana";
 import { Connection, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 
-/** Helius mainnet RPC — used for Shadowspace on-chain program + Bags token operations */
-export const HELIUS_MAINNET_RPC =
-  `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
+/** RPC endpoint — proxied through our API to keep the key hidden */
+const RPC_PROXY = typeof window !== "undefined"
+  ? `${window.location.origin}/api/rpc`
+  : (process.env.HELIUS_API_KEY_PRIVATE
+      ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE}`
+      : `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`);
+export const HELIUS_MAINNET_RPC = RPC_PROXY;
 
 /** @deprecated kept for any old references */
 export const HELIUS_DEVNET_RPC = HELIUS_MAINNET_RPC;

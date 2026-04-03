@@ -65,7 +65,7 @@ export default function TokenTrade({
     const fetchBalance = async () => {
       setLoadingBalance(true);
       try {
-        const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
+        const rpcUrl = "/api/rpc";
         const res = await fetch(rpcUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -152,10 +152,7 @@ export default function TokenTrade({
       );
       const signed = await signTransaction(tx);
 
-      const connection = new Connection(
-        `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
-        "confirmed"
-      );
+      const connection = new Connection("/api/rpc", "confirmed");
       const sig = await connection.sendRawTransaction(signed.serialize());
       await connection.confirmTransaction(sig, "confirmed");
 

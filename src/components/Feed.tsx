@@ -956,7 +956,6 @@ export default function Feed() {
   const fetchOnchainPosts = async () => {
     if (!program || !publicKey) return;
     setLoadingOnchain(true);
-    clearRpcCache();
     try {
       const [allMapped, profiles, comments, reactions] = await Promise.all([
         program.getAllPosts(),
@@ -988,12 +987,12 @@ export default function Feed() {
     fetchOnchainPosts();
   }, [program, publicKey]);
 
-  // Auto-refresh feed every 8s — posts (like counts), comments, reactions
+  // Auto-refresh feed every 30s — posts (like counts), comments, reactions
   useEffect(() => {
     if (!program || !publicKey) return;
     const interval = setInterval(() => {
       refreshFeed();
-    }, 8_000);
+    }, 30_000);
     return () => clearInterval(interval);
   }, [program, publicKey]);
 
@@ -1001,7 +1000,6 @@ export default function Feed() {
   const refreshFeed = async () => {
     if (!program) return;
     try {
-      clearRpcCache();
       const [allMapped, comments, reactions] = await Promise.all([
         program.getAllPosts(),
         program.getAllComments(),

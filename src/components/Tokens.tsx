@@ -132,10 +132,7 @@ export default function Tokens() {
       const txList: { unsignedTxBase64: string }[] = data.response;
       if (!txList || txList.length === 0) throw new Error("No claim transactions returned");
 
-      const connection = new Connection(
-        `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`,
-        "confirmed"
-      );
+      const connection = new Connection("/api/rpc", "confirmed");
 
       toast("info", `Signing ${txList.length} claim transaction(s)...`);
 

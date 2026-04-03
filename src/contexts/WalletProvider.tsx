@@ -9,13 +9,15 @@ const solanaConnectors = toSolanaWalletConnectors({
   shouldAutoConnect: true,
 });
 
-const HELIUS_API_KEY = process.env.NEXT_PUBLIC_HELIUS_API_KEY;
-const HELIUS_MAINNET = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+// RPC key is now hidden behind /api/rpc proxy — no key in the client bundle
+const HELIUS_MAINNET = typeof window !== "undefined"
+  ? `${window.location.origin}/api/rpc`
+  : `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE || process.env.NEXT_PUBLIC_HELIUS_API_KEY}`;
 
 const solanaRpcs = {
   "solana:mainnet": {
     rpc: createSolanaRpc(HELIUS_MAINNET),
-    rpcSubscriptions: createSolanaRpcSubscriptions(`wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`),
+    rpcSubscriptions: createSolanaRpcSubscriptions(`wss://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY}`),
     blockExplorerUrl: "https://explorer.solana.com",
   },
 } as const;
