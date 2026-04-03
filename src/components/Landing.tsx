@@ -443,6 +443,15 @@ export default function Landing() {
                 <p className="text-[10px] text-[#94A3B8]">Token Launches</p>
               </div>
             </a>
+            <a href="https://pinata.cloud" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-2 group">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border border-[#E2E8F0] group-hover:border-[#F7931A]/30 transition-all group-hover:shadow-lg">
+                <img src="/pinata.jpg" alt="Pinata" className="w-full h-full object-cover" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-bold text-[#1A1A2E]">Pinata</p>
+                <p className="text-[10px] text-[#94A3B8]">Media Infrastructure</p>
+              </div>
+            </a>
           </div>
         </div>
       </div>
