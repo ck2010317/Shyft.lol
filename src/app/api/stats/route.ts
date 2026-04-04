@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
-import { Connection, PublicKey } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  type ConfirmedSignatureInfo,
+} from "@solana/web3.js";
 
 /**
  * /api/stats — Returns live on-chain stats for the landing page.
- * Counts program accounts by type using discriminator filters.
+ * - Account counts: getProgramAccounts with discriminator filters
+ * - Transaction count: paginated getSignaturesForAddress (all-time total)
  * Cached for 60 seconds to avoid hammering RPC.
  */
 
@@ -29,6 +34,32 @@ interface StatsCache {
 let cache: StatsCache | null = null;
 const CACHE_TTL = 60_000; // 60 seconds
 
+/**
+ * Paginate through ALL transaction signatures for the program.
+ * getSignaturesForAddress returns max 1000 per call, so we loop
+ * using `before` cursor until we've fetched them all.
+ */
+async function getTotalTransactions(connection: Connection): Promise<number> {
+  let total = 0;
+  let before: string | undefined = undefined;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const opts: { limit: number; before?: string } = { limit: 1000 };
+    if (before) opts.before = before;
+
+    const sigs: ConfirmedSignatureInfo[] =
+      await connection.getSignaturesForAddress(PROGRAM_ID, opts);
+
+    total += sigs.length;
+
+    if (sigs.length < 1000) break;
+    before = sigs[sigs.length - 1].signature;
+  }
+
+  return total;
+}
+
 async function fetchStats(): Promise<Record<string, number>> {
   // Return cache if fresh
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL) {
@@ -38,39 +69,36 @@ async function fetchStats(): Promise<Record<string, number>> {
   const connection = new Connection(RPC_URL, "confirmed");
   const stats: Record<string, number> = {};
 
-  // Fetch counts in parallel using getProgramAccounts with dataSlice(0,0) for efficiency
   const entries = Object.entries(DISCRIMINATORS);
-  const results = await Promise.allSettled(
-    entries.map(([name, disc]) =>
-      connection.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ memcmp: { offset: 0, bytes: disc } }],
-        dataSlice: { offset: 0, length: 0 }, // Don't fetch data, just count
-      }).then(accounts => ({ name, count: accounts.length }))
-    )
-  );
 
-  for (const result of results) {
+  const [accountResults, txCount] = await Promise.all([
+    // 1) Account counts by type
+    Promise.allSettled(
+      entries.map(([name, disc]) =>
+        connection.getProgramAccounts(PROGRAM_ID, {
+          filters: [{ memcmp: { offset: 0, bytes: disc } }],
+          dataSlice: { offset: 0, length: 0 },
+        }).then(accounts => ({ name, count: accounts.length }))
+      )
+    ),
+    // 2) Total transaction count (paginated, all-time)
+    getTotalTransactions(connection).catch((err) => {
+      console.error("Failed to fetch tx count:", err?.message || err);
+      return cache?.data.Transactions || 0;
+    }),
+  ]);
+
+  for (const result of accountResults) {
     if (result.status === "fulfilled") {
       stats[result.value.name] = result.value.count;
     } else {
-      // Log the error so we can see what's going wrong
-      const name = entries[results.indexOf(result)][0];
+      const name = entries[accountResults.indexOf(result)][0];
       console.error(`Stats fetch failed for ${name}:`, result.reason?.message || result.reason);
       stats[name] = cache?.data[name] || 0;
     }
   }
 
-  // Transactions = sum of all on-chain account actions
-  // (profiles + posts + follows + reactions + comments + messages)
-  // More reliable than getSignaturesForAddress which caps at 1000 and often fails
-  stats.Transactions =
-    (stats.Profile || 0) +
-    (stats.Post || 0) +
-    (stats.Follow || 0) +
-    (stats.Reaction || 0) +
-    (stats.Comment || 0) +
-    (stats.Chat || 0) +
-    (stats.Message || 0);
+  stats.Transactions = txCount;
 
   cache = { data: stats, fetchedAt: Date.now() };
   return stats;
