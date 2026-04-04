@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ArrowUpRight, ArrowDownLeft, Shield, Lock, Send, DollarSign, ExternalLink, Eye, EyeOff, ChevronDown, Wallet, Check, RefreshCw } from "lucide-react";
+import { ArrowUpRight, ArrowDownLeft, Shield, Lock, Send, DollarSign, ExternalLink, Eye, EyeOff, ChevronDown, Wallet, Check, RefreshCw, ToggleLeft, ToggleRight } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { usePrivatePayment } from "@/hooks/usePrivatePayment";
+import { useMagicBlockPayment, type PaymentVisibility } from "@/hooks/useMagicBlockPayment";
 import type { Payment } from "@/types";
 
 function timeAgo(timestamp: number): string {
@@ -23,7 +24,15 @@ export default function Payments() {
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<"public" | "private">("public");
   const { sendPayment, step: paymentStep, error: paymentError, txSignature, reset: resetPayment } = usePrivatePayment();
+  const { sendPrivatePayment, step: mbStep, error: mbError, txSignature: mbTxSignature, reset: resetMb } = useMagicBlockPayment();
+
+  // Unified step/error/sig based on current mode
+  const activeStep = paymentMode === "private" ? mbStep : paymentStep;
+  const activeError = paymentMode === "private" ? mbError : paymentError;
+  const activeTxSig = paymentMode === "private" ? mbTxSignature : txSignature;
+  const activeReset = paymentMode === "private" ? resetMb : resetPayment;
 
   // Payment records from local state
   const [loadingOnChain, setLoadingOnChain] = useState(false);
@@ -42,11 +51,11 @@ export default function Payments() {
 
   // Reload after a payment is sent
   useEffect(() => {
-    if (paymentStep === "done") {
+    if (activeStep === "done") {
       const timer = setTimeout(() => loadOnChainPayments(), 3000);
       return () => clearTimeout(timer);
     }
-  }, [paymentStep, loadOnChainPayments]);
+  }, [activeStep, loadOnChainPayments]);
 
   // Use local payment records
   const allPayments = (() => {
@@ -112,7 +121,7 @@ export default function Payments() {
             </div>
             <div className="text-left">
               <p className="text-sm font-semibold text-[#1A1A2E]">Send Payment</p>
-              <p className="text-[10px] sm:text-[11px] text-[#64748B]">Send SOL to friends on Solana</p>
+              <p className="text-[10px] sm:text-[11px] text-[#64748B]">Send SOL or private USDC to friends</p>
             </div>
           </div>
           <ChevronDown className={`w-4 h-4 text-[#94A3B8] transition-transform flex-shrink-0 ${showSendForm ? "rotate-180" : ""}`} />
@@ -120,7 +129,41 @@ export default function Payments() {
 
         {showSendForm && (
           <div className="px-3.5 sm:px-5 pb-4 sm:pb-5 space-y-3 animate-fade-in border-t border-[#F1F5F9]">
+            {/* Payment Mode Toggle */}
             <div className="pt-4">
+              <label className="text-xs font-medium text-[#64748B] mb-2 block">Payment Mode</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setPaymentMode("public"); activeReset(); }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+                    paymentMode === "public"
+                      ? "bg-[#EFF6FF] border-[#2563EB] text-[#2563EB] shadow-sm"
+                      : "bg-[#F8FAFC] border-[#E2E8F0] text-[#64748B] hover:bg-[#F1F5F9]"
+                  }`}
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  Public (SOL)
+                </button>
+                <button
+                  onClick={() => { setPaymentMode("private"); activeReset(); }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+                    paymentMode === "private"
+                      ? "bg-[#F0FDF4] border-[#16A34A] text-[#16A34A] shadow-sm"
+                      : "bg-[#F8FAFC] border-[#E2E8F0] text-[#64748B] hover:bg-[#F1F5F9]"
+                  }`}
+                >
+                  <EyeOff className="w-3.5 h-3.5" />
+                  Private (USDC)
+                </button>
+              </div>
+              {paymentMode === "private" && (
+                <p className="text-[10px] text-[#16A34A] mt-1.5 flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5" /> Powered by MagicBlock — privacy via ephemeral rollups
+                </p>
+              )}
+            </div>
+
+            <div>
               <label className="text-xs font-medium text-[#64748B] mb-1.5 block">Recipient Address</label>
               <input
                 type="text"
@@ -141,96 +184,170 @@ export default function Payments() {
                   placeholder="0.00"
                   className="flex-1 bg-transparent text-sm focus:outline-none"
                 />
-                <span className="text-xs font-medium text-[#64748B]">SOL</span>
+                <span className="text-xs font-medium text-[#64748B]">{paymentMode === "private" ? "USDC" : "SOL"}</span>
               </div>
             </div>
 
             {/* Payment Flow visualization */}
-            <div className="bg-[#F8FAFC] rounded-xl p-4 space-y-2">
-              <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider">Payment Flow</p>
-              <div className="flex items-center gap-2 text-xs text-[#475569]">
-                <span className="w-5 h-5 rounded-full bg-[#2563EB] text-white flex items-center justify-center text-[10px] font-bold">1</span>
-                <span>Send SOL directly on Solana</span>
-                <Lock className="w-3 h-3 text-[#16A34A] ml-auto" />
-              </div>
-              <div className="flex items-center gap-2 text-xs text-[#475569]">
-                <span className="w-5 h-5 rounded-full bg-[#7C3AED] text-white flex items-center justify-center text-[10px] font-bold">2</span>
-                <span>Record payment on-chain</span>
-                <Lock className="w-3 h-3 text-[#16A34A] ml-auto" />
-              </div>
-              <div className="flex items-center gap-2 text-xs text-[#475569]">
-                <span className="w-5 h-5 rounded-full bg-[#16A34A] text-white flex items-center justify-center text-[10px] font-bold">3</span>
-                <span>Confirmed on Solana</span>
-                <Shield className="w-3 h-3 text-[#16A34A] ml-auto" />
-              </div>
-            </div>
-
-            {/* Payment Status */}
-            {paymentStep !== "idle" && paymentStep !== "done" && paymentStep !== "error" && (
-              <div className="bg-[#EFF6FF] rounded-xl p-4 space-y-2 animate-fade-in">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm font-medium text-[#2563EB]">
-                    {paymentStep === "sending" && "Sending SOL payment..."}
-                    {paymentStep === "confirming" && "Confirming transaction..."}
-                    {paymentStep === "recording" && "Recording payment on-chain..."}
-                    {paymentStep === "finalizing" && "Finalizing..."}
-                  </span>
+            {paymentMode === "public" ? (
+              <div className="bg-[#F8FAFC] rounded-xl p-4 space-y-2">
+                <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider">Payment Flow</p>
+                <div className="flex items-center gap-2 text-xs text-[#475569]">
+                  <span className="w-5 h-5 rounded-full bg-[#2563EB] text-white flex items-center justify-center text-[10px] font-bold">1</span>
+                  <span>Send SOL directly on Solana</span>
+                  <Lock className="w-3 h-3 text-[#16A34A] ml-auto" />
                 </div>
-                <div className="flex gap-1">
-                  <div className={`h-1.5 flex-1 rounded-full ${["sending", "confirming", "recording", "finalizing"].includes(paymentStep) ? "bg-[#2563EB]" : "bg-[#E2E8F0]"}`} />
-                  <div className={`h-1.5 flex-1 rounded-full ${["confirming", "recording", "finalizing"].includes(paymentStep) ? "bg-[#7C3AED]" : "bg-[#E2E8F0]"}`} />
-                  <div className={`h-1.5 flex-1 rounded-full ${["recording", "finalizing"].includes(paymentStep) ? "bg-[#7C3AED]" : "bg-[#E2E8F0]"}`} />
-                  <div className={`h-1.5 flex-1 rounded-full ${paymentStep === "finalizing" ? "bg-[#16A34A]" : "bg-[#E2E8F0]"}`} />
+                <div className="flex items-center gap-2 text-xs text-[#475569]">
+                  <span className="w-5 h-5 rounded-full bg-[#7C3AED] text-white flex items-center justify-center text-[10px] font-bold">2</span>
+                  <span>Record payment on-chain</span>
+                  <Lock className="w-3 h-3 text-[#16A34A] ml-auto" />
+                </div>
+                <div className="flex items-center gap-2 text-xs text-[#475569]">
+                  <span className="w-5 h-5 rounded-full bg-[#16A34A] text-white flex items-center justify-center text-[10px] font-bold">3</span>
+                  <span>Confirmed on Solana</span>
+                  <Shield className="w-3 h-3 text-[#16A34A] ml-auto" />
+                </div>
+              </div>
+            ) : (
+              <div className="bg-[#F0FDF4]/50 rounded-xl p-4 space-y-2 border border-[#16A34A]/10">
+                <p className="text-[10px] font-semibold text-[#16A34A] uppercase tracking-wider flex items-center gap-1">
+                  <EyeOff className="w-2.5 h-2.5" /> Private Payment Flow
+                </p>
+                <div className="flex items-center gap-2 text-xs text-[#475569]">
+                  <span className="w-5 h-5 rounded-full bg-[#16A34A] text-white flex items-center justify-center text-[10px] font-bold">1</span>
+                  <span>Build private tx via MagicBlock</span>
+                  <Lock className="w-3 h-3 text-[#16A34A] ml-auto" />
+                </div>
+                <div className="flex items-center gap-2 text-xs text-[#475569]">
+                  <span className="w-5 h-5 rounded-full bg-[#16A34A] text-white flex items-center justify-center text-[10px] font-bold">2</span>
+                  <span>Sign &amp; send through ephemeral rollup</span>
+                  <EyeOff className="w-3 h-3 text-[#16A34A] ml-auto" />
+                </div>
+                <div className="flex items-center gap-2 text-xs text-[#475569]">
+                  <span className="w-5 h-5 rounded-full bg-[#16A34A] text-white flex items-center justify-center text-[10px] font-bold">3</span>
+                  <span>USDC arrives — amount hidden on-chain</span>
+                  <Shield className="w-3 h-3 text-[#16A34A] ml-auto" />
                 </div>
               </div>
             )}
 
-            {paymentStep === "done" && txSignature && (
+            {/* Payment Status */}
+            {activeStep !== "idle" && activeStep !== "done" && activeStep !== "error" && (
+              <div className={`rounded-xl p-4 space-y-2 animate-fade-in ${paymentMode === "private" ? "bg-[#F0FDF4]" : "bg-[#EFF6FF]"}`}>
+                <div className="flex items-center gap-2">
+                  <div className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${paymentMode === "private" ? "border-[#16A34A]" : "border-[#2563EB]"}`} />
+                  <span className={`text-sm font-medium ${paymentMode === "private" ? "text-[#16A34A]" : "text-[#2563EB]"}`}>
+                    {paymentMode === "private" ? (
+                      <>
+                        {activeStep === "building" && "Building private transaction..."}
+                        {activeStep === "signing" && "Sign to approve private transfer..."}
+                        {activeStep === "sending" && "Sending through MagicBlock..."}
+                        {activeStep === "confirming" && "Confirming private transfer..."}
+                      </>
+                    ) : (
+                      <>
+                        {activeStep === "sending" && "Sending SOL payment..."}
+                        {activeStep === "confirming" && "Confirming transaction..."}
+                        {activeStep === "recording" && "Recording payment on-chain..."}
+                        {activeStep === "finalizing" && "Finalizing..."}
+                      </>
+                    )}
+                  </span>
+                </div>
+                <div className="flex gap-1">
+                  {paymentMode === "private" ? (
+                    <>
+                      <div className={`h-1.5 flex-1 rounded-full ${["building", "signing", "sending", "confirming"].includes(activeStep) ? "bg-[#16A34A]" : "bg-[#E2E8F0]"}`} />
+                      <div className={`h-1.5 flex-1 rounded-full ${["signing", "sending", "confirming"].includes(activeStep) ? "bg-[#16A34A]" : "bg-[#E2E8F0]"}`} />
+                      <div className={`h-1.5 flex-1 rounded-full ${["sending", "confirming"].includes(activeStep) ? "bg-[#16A34A]" : "bg-[#E2E8F0]"}`} />
+                      <div className={`h-1.5 flex-1 rounded-full ${activeStep === "confirming" ? "bg-[#16A34A]" : "bg-[#E2E8F0]"}`} />
+                    </>
+                  ) : (
+                    <>
+                      <div className={`h-1.5 flex-1 rounded-full ${["sending", "confirming", "recording", "finalizing"].includes(activeStep) ? "bg-[#2563EB]" : "bg-[#E2E8F0]"}`} />
+                      <div className={`h-1.5 flex-1 rounded-full ${["confirming", "recording", "finalizing"].includes(activeStep) ? "bg-[#7C3AED]" : "bg-[#E2E8F0]"}`} />
+                      <div className={`h-1.5 flex-1 rounded-full ${["recording", "finalizing"].includes(activeStep) ? "bg-[#7C3AED]" : "bg-[#E2E8F0]"}`} />
+                      <div className={`h-1.5 flex-1 rounded-full ${activeStep === "finalizing" ? "bg-[#16A34A]" : "bg-[#E2E8F0]"}`} />
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeStep === "done" && activeTxSig && (
               <div className="bg-[#F0FDF4] rounded-xl p-4 animate-fade-in">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-5 h-5 rounded-full bg-[#16A34A] flex items-center justify-center">
                     <Check className="w-3 h-3 text-white" />
                   </div>
-                  <span className="text-sm font-semibold text-[#15803D]">Payment Sent!</span>
+                  <span className="text-sm font-semibold text-[#15803D]">
+                    {paymentMode === "private" ? "Private Payment Sent!" : "Payment Sent!"}
+                  </span>
+                  {paymentMode === "private" && (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-[#16A34A] bg-[#DCFCE7] px-1.5 py-0.5 rounded-full">
+                      <EyeOff className="w-2 h-2" /> Private
+                    </span>
+                  )}
                 </div>
                 <a
-                  href={`https://explorer.solana.com/tx/${txSignature}`}
+                  href={`https://explorer.solana.com/tx/${activeTxSig}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-[#2563EB] hover:underline flex items-center gap-1"
                 >
                   View on Explorer <ExternalLink className="w-3 h-3" />
                 </a>
-                <button onClick={resetPayment} className="mt-2 text-xs text-[#64748B] hover:text-[#1A1A2E]">
+                <button onClick={activeReset} className="mt-2 text-xs text-[#64748B] hover:text-[#1A1A2E]">
                   Send another payment
                 </button>
               </div>
             )}
 
-            {paymentStep === "error" && paymentError && (
+            {activeStep === "error" && activeError && (
               <div className="bg-red-50 rounded-xl p-4 animate-fade-in">
                 <p className="text-sm text-red-600 font-medium">Payment failed</p>
-                <p className="text-xs text-red-500 mt-1">{paymentError}</p>
-                <button onClick={resetPayment} className="mt-2 text-xs text-[#2563EB] hover:underline">
+                <p className="text-xs text-red-500 mt-1">{activeError}</p>
+                <button onClick={activeReset} className="mt-2 text-xs text-[#2563EB] hover:underline">
                   Try again
                 </button>
               </div>
             )}
 
             <button
-              onClick={() => sendPayment(recipient, parseFloat(amount))}
-              disabled={!recipient || !amount || !["idle", "done", "error"].includes(paymentStep)}
-              className="w-full py-3 bg-gradient-to-r from-[#2563EB] to-[#16A34A] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md"
+              onClick={() => {
+                if (paymentMode === "private") {
+                  sendPrivatePayment(recipient, parseFloat(amount), "private");
+                } else {
+                  sendPayment(recipient, parseFloat(amount));
+                }
+              }}
+              disabled={!recipient || !amount || !["idle", "done", "error"].includes(activeStep)}
+              className={`w-full py-3 text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md ${
+                paymentMode === "private"
+                  ? "bg-gradient-to-r from-[#16A34A] to-[#059669]"
+                  : "bg-gradient-to-r from-[#2563EB] to-[#16A34A]"
+              }`}
             >
-              {["sending", "confirming", "recording", "finalizing"].includes(paymentStep)
-                ? paymentStep === "recording" ? "Recording on-chain..."
-                  : paymentStep === "finalizing" ? "Finalizing..."
-                  : "Processing..."
-                : "Send Payment"}
+              {["building", "signing", "sending", "confirming", "recording", "finalizing"].includes(activeStep)
+                ? paymentMode === "private"
+                  ? activeStep === "building" ? "Building Private Tx..."
+                    : activeStep === "signing" ? "Waiting for Signature..."
+                    : activeStep === "confirming" ? "Confirming..."
+                    : "Processing..."
+                  : activeStep === "recording" ? "Recording on-chain..."
+                    : activeStep === "finalizing" ? "Finalizing..."
+                    : "Processing..."
+                : paymentMode === "private"
+                  ? `Send Private ${amount || "0"} USDC`
+                  : "Send Payment"
+              }
             </button>
             <p className="text-[10px] text-center text-[#94A3B8] flex items-center justify-center gap-1">
-              <Shield className="w-2.5 h-2.5" /> Payment recorded on Solana
+              {paymentMode === "private" ? (
+                <><EyeOff className="w-2.5 h-2.5" /> Private USDC transfer via MagicBlock</>
+              ) : (
+                <><Shield className="w-2.5 h-2.5" /> Payment recorded on Solana</>
+              )}
             </p>
           </div>
         )}
@@ -254,36 +371,75 @@ export default function Payments() {
         {showHowItWorks && (
           <div className="px-5 pb-5 border-t border-[#F1F5F9] pt-4 animate-fade-in">
             <div className="space-y-4">
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-[#2563EB]">1</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-[#1A1A2E]">Direct SOL Transfer</p>
-                  <p className="text-xs text-[#64748B] mt-0.5">SOL is sent directly to your friend&apos;s wallet on Solana. Fast, secure, and cost-effective.</p>
+              {/* Public Payment */}
+              <div className="mb-3">
+                <p className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider mb-3 flex items-center gap-1">
+                  <Eye className="w-3 h-3" /> Public Payments (SOL)
+                </p>
+                <div className="space-y-3 pl-1">
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-bold text-[#2563EB]">1</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#1A1A2E]">Direct SOL Transfer</p>
+                      <p className="text-xs text-[#64748B] mt-0.5">SOL is sent directly to your friend&apos;s wallet on Solana. Fast, secure, and cost-effective.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-bold text-[#2563EB]">2</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#1A1A2E]">Payment Recorded On-Chain</p>
+                      <p className="text-xs text-[#64748B] mt-0.5">The payment is recorded as a message in your chat so both participants can see the transaction history.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-[#2563EB]">2</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-[#1A1A2E]">Payment Recorded On-Chain</p>
-                  <p className="text-xs text-[#64748B] mt-0.5">The payment is recorded as a message in your chat so both participants can see the transaction history.</p>
+
+              {/* Divider */}
+              <div className="border-t border-[#E2E8F0]" />
+
+              {/* Private Payment */}
+              <div>
+                <p className="text-[10px] font-semibold text-[#16A34A] uppercase tracking-wider mb-3 flex items-center gap-1">
+                  <EyeOff className="w-3 h-3" /> Private Payments (USDC via MagicBlock)
+                </p>
+                <div className="space-y-3 pl-1">
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#F0FDF4] flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-bold text-[#16A34A]">1</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#1A1A2E]">Private Transaction Built</p>
+                      <p className="text-xs text-[#64748B] mt-0.5">MagicBlock&apos;s API builds a privacy-preserving USDC transfer using ephemeral rollups (TEE-based).</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#F0FDF4] flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-bold text-[#16A34A]">2</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#1A1A2E]">Sign &amp; Send</p>
+                      <p className="text-xs text-[#64748B] mt-0.5">You sign the transaction — USDC is transferred with the amount hidden from on-chain observers.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#F0FDF4] flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-bold text-[#16A34A]">3</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#1A1A2E]">Recipient Gets USDC</p>
+                      <p className="text-xs text-[#64748B] mt-0.5">USDC arrives in the recipient&apos;s wallet. The transfer amount stays private — only sender and receiver know.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[#F0FDF4] flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-bold text-[#16A34A]">3</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-[#1A1A2E]">Confirmed on Solana</p>
-                  <p className="text-xs text-[#64748B] mt-0.5">The transaction is confirmed on the Solana blockchain. Fast, reliable, and permanent.</p>
-                </div>
-              </div>
+
               <div className="bg-[#F8FAFC] rounded-xl p-3 mt-2">
                 <p className="text-xs text-[#64748B]">
-                  <span className="font-semibold text-[#1A1A2E]">On-Chain Records:</span> All payments are recorded on Solana so <span className="text-[#16A34A] font-medium">both participants have a verifiable transaction history</span>.
+                  <span className="font-semibold text-[#1A1A2E]">Your Keys, Your Funds:</span> All payments are user-to-user. <span className="text-[#16A34A] font-medium">You pay the fees, you sign the transaction — no middleman</span>.
                 </p>
               </div>
             </div>
