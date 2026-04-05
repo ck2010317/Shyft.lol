@@ -973,8 +973,6 @@ export default function Feed() {
 
       // Show all posts: free (public) + paid (private with PAID| prefix), exclude community posts
       const visiblePosts = allMapped.filter((p: any) => !p.content.startsWith("COMM|") && (!p.isPrivate || p.content.startsWith("PAID|")));
-      
-      console.log("📊 All posts:", allMapped.length, "Visible:", visiblePosts.length);
 
       setOnchainPosts(visiblePosts.sort((a: any, b: any) => Number(b.createdAt) - Number(a.createdAt)));
       

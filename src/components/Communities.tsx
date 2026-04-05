@@ -363,6 +363,119 @@ export default function Communities() {
             </div>
           )}
         </div>
+
+        {/* Edit Community Modal (rendered in detail view) */}
+        {showEdit && editingCommunity && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4" onClick={() => { setShowEdit(false); setConfirmDelete(false); }}>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-[#1A1A2E]">Edit Community</h3>
+                <button onClick={() => { setShowEdit(false); setConfirmDelete(false); }} className="p-1 rounded-lg hover:bg-[#F1F5F9]">
+                  <X className="w-5 h-5 text-[#64748B]" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-[#F8FAFC] rounded-xl">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#7C3AED] flex items-center justify-center text-white font-bold overflow-hidden shrink-0">
+                  {editAvatarUrl ? <img src={editAvatarUrl} alt="" className="w-full h-full object-cover" /> : editingCommunity.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-[#1A1A2E]">{editingCommunity.name}</p>
+                  <p className="text-[10px] text-[#94A3B8]">ID: {editingCommunity.communityId}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-[#64748B] mb-1 block">Description</label>
+                <textarea
+                  placeholder="What's this community about?"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value.slice(0, 128))}
+                  rows={3}
+                  className="w-full px-4 py-2.5 text-sm bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] text-[#1A1A2E] placeholder-[#94A3B8] resize-none"
+                />
+                <p className="text-[10px] text-[#94A3B8] mt-1">{editDescription.length}/128</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-[#64748B] mb-1 block">Community Avatar</label>
+                <div className="flex items-center gap-3">
+                  {editAvatarUrl ? (
+                    <div className="w-14 h-14 rounded-xl overflow-hidden border border-[#E2E8F0] shrink-0">
+                      <img src={editAvatarUrl} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-xl bg-[#F1F5F9] border border-dashed border-[#CBD5E1] flex items-center justify-center shrink-0">
+                      <ImageIcon className="w-5 h-5 text-[#94A3B8]" />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-1.5">
+                    <label className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl hover:bg-[#F1F5F9] transition-colors cursor-pointer">
+                      {uploadingEditAvatar ? (
+                        <><Loader2 className="w-4 h-4 text-[#2563EB] animate-spin" /> Uploading...</>
+                      ) : (
+                        <><Upload className="w-4 h-4 text-[#64748B]" /> {editAvatarUrl ? "Change image" : "Upload image"}</>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={uploadingEditAvatar}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadAvatar(file, setEditAvatarUrl, setUploadingEditAvatar);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                    {editAvatarUrl && (
+                      <button onClick={() => setEditAvatarUrl("")} className="text-[10px] text-[#DC2626] hover:underline">Remove</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleSaveEdit}
+                disabled={saving}
+                className="w-full py-3 text-sm font-semibold bg-[#2563EB] text-white rounded-xl hover:bg-[#1D4ED8] transition-colors disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+
+              {/* Delete Section */}
+              <div className="border-t border-[#E2E8F0] pt-4">
+                {confirmDelete ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-[#DC2626] font-semibold">Are you sure? This will permanently delete the community and return rent to treasury.</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="flex-1 py-2.5 text-sm font-semibold bg-[#DC2626] text-white rounded-xl hover:bg-[#B91C1C] transition-colors disabled:opacity-50"
+                      >
+                        {deleting ? "Deleting..." : "Yes, Delete"}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(false)}
+                        className="flex-1 py-2.5 text-sm font-semibold bg-[#F1F5F9] text-[#64748B] rounded-xl hover:bg-[#E2E8F0] transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-[#DC2626] bg-[#FEF2F2] rounded-xl hover:bg-[#FEE2E2] transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" /> Delete Community
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
