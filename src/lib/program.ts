@@ -1128,6 +1128,19 @@ export class ShyftClient {
     return sig;
   }
 
+  async updateCommunity(communityId: number, description: string, avatarUrl: string): Promise<string> {
+    const sig = await requestServerTx("updateCommunity", { communityId, description, avatarUrl: compressIpfsUrl(avatarUrl) }, this.provider.wallet, this.provider.connection);
+    rpcCache.invalidate("allCommunities");
+    return sig;
+  }
+
+  async closeCommunity(communityId: number): Promise<string> {
+    const sig = await requestServerTx("closeCommunity", { communityId }, this.provider.wallet, this.provider.connection);
+    rpcCache.invalidate("allCommunities");
+    rpcCache.invalidate("allMemberships");
+    return sig;
+  }
+
   async getAllCommunities(): Promise<any[]> {
     const cacheKey = "allCommunities";
     const cached = rpcCache.get<any[]>(cacheKey);

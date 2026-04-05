@@ -410,6 +410,16 @@ const actions: Record<string, ActionHandler> = {
       .accounts({ community: communityPda, user, treasury })
       .instruction();
   },
+
+  async updateCommunity(params, user, treasury, program) {
+    const { communityId, description, avatarUrl } = params;
+    if (communityId === undefined) throw new Error("Missing communityId");
+    const [communityPda] = getCommunityPda(communityId);
+    return program.methods
+      .updateCommunity(new BN(communityId), description || "", avatarUrl || "")
+      .accounts({ community: communityPda, user })
+      .instruction();
+  },
 };
 
 // ========== GET — returns treasury pubkey ==========
