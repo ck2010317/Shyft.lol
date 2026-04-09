@@ -731,23 +731,29 @@ export function OnChainPostCard({
         </button>
         )}
 
-        {/* Share — don't leak paid content */}
+        {/* Share — Blink-enabled sharing with Solana Actions */}
         <button
-          onClick={async () => {
+          onClick={async (e) => {
+            e.stopPropagation();
             const authorName = profile?.username ? `@${profile.username}` : post.author.slice(0, 8);
-            const shareContent = isPaid ? `🔒 Paid post by ${authorName} on Shyft — unlock to view` : (post.content.length > 80 ? post.content.slice(0, 80) + "..." : post.content);
-            const shareUrl = `https://www.shyft.lol`;
-            const shareText = `"${shareContent}" — ${authorName} on Shyft\n\n${shareUrl}`;
+            const postKey = `${post.author}-${post.postId}`;
+            const shareUrl = `https://www.shyft.lol/post/${postKey}`;
+            const blinkUrl = `https://dial.to/?action=solana-action%3Ahttps%3A%2F%2Fwww.shyft.lol%2Fapi%2Factions%2Fpost%3Fauthor%3D${post.author}%26postId%3D${post.postId}`;
+            const shareContent = isPaid
+              ? `🔒 Paid post by ${authorName} on Shyft — unlock to view`
+              : (post.content.length > 80 ? post.content.slice(0, 80) + "..." : post.content);
+            const shareText = `"${shareContent}" — ${authorName} on Shyft\n\n⚡ Like & Tip via Blink: ${blinkUrl}\n🔗 View: ${shareUrl}`;
             if (navigator.share) {
               try {
-                await navigator.share({ title: `${authorName} on Shyft`, text: `"${shareContent}"`, url: shareUrl });
+                await navigator.share({ title: `${authorName} on Shyft`, text: `"${shareContent}"`, url: blinkUrl });
               } catch {}
             } else {
               await navigator.clipboard.writeText(shareText);
-              toast("success", "Link copied! 🔗", "Share it with your friends");
+              toast("success", "Blink link copied! ⚡", "Paste on X — anyone with Phantom can interact");
             }
           }}
           className="touch-active flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium text-[#94A3B8] hover:text-[#2563EB] hover:bg-[#EBF4FF] active:bg-[#EBF4FF] transition-all"
+          title="Share as Solana Blink"
         >
           <Share2 className="w-4 h-4" />
         </button>
