@@ -13,6 +13,12 @@ import {
   ShieldCheck,
   KeyRound,
   AlertCircle,
+  DollarSign,
+  X,
+  Eye,
+  EyeOff,
+  Check,
+  Loader2,
 } from "lucide-react";
 import { useProgram } from "@/hooks/useProgram";
 import { toast } from "@/components/Toast";
@@ -20,6 +26,8 @@ import { useWallet } from "@/hooks/usePrivyWallet";
 import { PublicKey } from "@solana/web3.js";
 import { deriveEncryptionKeypair } from "@/lib/encryption";
 import { deriveChatId } from "@/lib/program";
+import { usePrivatePayment, type PaymentStep } from "@/hooks/usePrivatePayment";
+import { useMagicBlockPayment, type MagicBlockPaymentStep } from "@/hooks/useMagicBlockPayment";
 import nacl from "tweetnacl";
 
 function timeAgo(timestamp: number): string {
@@ -90,6 +98,16 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const keyPublishedChats = useRef(new Set<number>());
+
+  // Payment state
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMode, setPaymentMode] = useState<"private" | "public">("private");
+  const [paymentSending, setPaymentSending] = useState(false);
+
+  // Payment hooks
+  const { sendPrivatePayment, step: mbStep, error: mbError, txSignature: mbTxSignature, reset: resetMb } = useMagicBlockPayment();
+  const { sendPayment: sendSolPayment, step: solStep, error: solError, txSignature: solTxSignature, reset: resetSol } = usePrivatePayment();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -410,6 +428,127 @@ export default function Chat() {
     setSending(false);
   };
 
+  // Send payment in chat (MagicBlock private USDC or public SOL)
+  const handleSendPayment = async () => {
+    if (!activeChat || !program || !publicKey || !encryptionKeys) return;
+    const amount = parseFloat(paymentAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast("error", "Invalid amount", "Please enter a valid amount");
+      return;
+    }
+
+    setPaymentSending(true);
+    try {
+      let txSig: string | null = null;
+      const recipientAddress = activeChat.friend.address;
+      const currency = paymentMode === "private" ? "USDC" : "SOL";
+
+      if (paymentMode === "private") {
+        // MagicBlock private USDC transfer
+        txSig = await sendPrivatePayment(recipientAddress, amount, "private");
+      } else {
+        // Public SOL transfer
+        txSig = await sendSolPayment(recipientAddress, amount);
+      }
+
+      if (!txSig) {
+        toast("error", "Payment failed", mbError || solError || "Transaction was not completed");
+        setPaymentSending(false);
+        return;
+      }
+
+      // Send a payment message in the chat so both users see it
+      const paymentContent = `💸 Sent ${amount} ${currency} ${paymentMode === "private" ? "privately" : ""} • tx: ${txSig.slice(0, 8)}...`;
+
+      // Ensure chat exists
+      let chatInfo = activeChat;
+      if (!chatInfo.exists) {
+        setCreatingChat(true);
+        const { chatId, isNew } = await program.getOrCreateE2EChat(
+          chatInfo.friend.pubkey,
+          encryptionKeys.publicKey
+        );
+        chatInfo = { ...chatInfo, chatId, exists: true, messageCount: isNew ? 1 : chatInfo.messageCount };
+        setActiveChat(chatInfo);
+        setChats(prev => prev.map(c =>
+          c.friendAddress === chatInfo!.friendAddress ? chatInfo! : c
+        ));
+        setCreatingChat(false);
+      }
+
+      // Ensure encryption key is published
+      const myAddr = publicKey.toBase58();
+      if (chatInfo.exists && !keyPublishedChats.current.has(chatInfo.chatId)) {
+        try {
+          const hasMyKey = await program.findMyEncryptionKey(chatInfo.chatId, myAddr);
+          if (!hasMyKey) {
+            const keyMsgIndex = await program.getNextMessageIndex(chatInfo.chatId);
+            await program.publishEncryptionKey(chatInfo.chatId, keyMsgIndex, encryptionKeys.publicKey);
+            keyPublishedChats.current.add(chatInfo.chatId);
+          } else {
+            keyPublishedChats.current.add(chatInfo.chatId);
+          }
+        } catch (keyErr) {
+          console.error("Key publish failed during payment:", keyErr);
+        }
+      }
+
+      // Send payment notification as chat message
+      const peerKey = await program.findPeerEncryptionKey(chatInfo.chatId, myAddr);
+      setPeerPubKey(peerKey);
+      const msgIndex = await program.getNextMessageIndex(chatInfo.chatId);
+
+      // Add optimistic local message
+      const localMsg: DecryptedMsg = {
+        publicKey: "pending-pay",
+        messageIndex: msgIndex,
+        sender: publicKey.toBase58(),
+        content: "PAY:" + paymentContent,
+        decrypted: paymentContent,
+        isPayment: true,
+        paymentAmount: amount,
+        timestamp: Math.floor(Date.now() / 1000).toString(),
+        isKeyExchange: false,
+        isEncrypted: true,
+        isMe: true,
+      };
+      setMessages(prev => [...prev, localMsg]);
+
+      if (peerKey) {
+        await program.sendE2EMessage(
+          chatInfo.chatId,
+          msgIndex,
+          `PAY:${amount}:${currency}:${txSig}`,
+          encryptionKeys.secretKey,
+          peerKey
+        );
+      } else {
+        await program.sendMessageSimple(
+          chatInfo.chatId,
+          msgIndex,
+          `PLAIN:PAY:${amount}:${currency}:${txSig}`
+        );
+      }
+
+      setChats(prev => prev.map(c =>
+        c.friendAddress === chatInfo!.friendAddress
+          ? { ...c, lastMessage: `💸 ${amount} ${currency}`, lastMessageTime: Date.now(), exists: true, messageCount: msgIndex + 1 }
+          : c
+      ));
+
+      toast("success", "Payment sent! 💸", `${amount} ${currency} → @${activeChat.friend.username}`);
+      setShowPayment(false);
+      setPaymentAmount("");
+      resetMb();
+      resetSol();
+    } catch (err: any) {
+      console.error("Payment error:", err);
+      toast("error", "Payment failed", err?.message?.slice(0, 80) || "Transaction failed");
+      setMessages(prev => prev.filter(m => m.publicKey !== "pending-pay"));
+    }
+    setPaymentSending(false);
+  };
+
   const filteredChats = chats.filter(c =>
     c.friend.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.friend.address.toLowerCase().includes(searchQuery.toLowerCase())
@@ -660,12 +799,70 @@ export default function Chat() {
               )}
 
               {messages.filter(m => !m.isKeyExchange).map((msg, i) => {
-                const displayText = msg.isEncrypted
+                const isPaymentMsg = msg.isPayment || msg.decrypted?.startsWith("PAY:") || msg.content?.startsWith("PAY:");
+                let displayText = msg.isEncrypted
                   ? (msg.decrypted || "🔒 Unable to decrypt")
                   : msg.content;
 
+                // Parse payment messages for display
+                let payAmount = "";
+                let payCurrency = "";
+                let payTxSig = "";
+                if (isPaymentMsg && msg.decrypted) {
+                  const raw = msg.decrypted.startsWith("PAY:") ? msg.decrypted : msg.decrypted;
+                  const parts = raw.replace(/^PAY:/, "").split(":");
+                  if (parts.length >= 3) {
+                    payAmount = parts[0];
+                    payCurrency = parts[1];
+                    payTxSig = parts[2];
+                    displayText = `💸 ${payAmount} ${payCurrency}`;
+                  } else if (raw.startsWith("💸")) {
+                    displayText = raw;
+                  }
+                }
+
                 return (
                   <div key={`${msg.timestamp}-${i}`} className={`flex ${msg.isMe ? "justify-end" : "justify-start"}`}>
+                    {isPaymentMsg ? (
+                      <div
+                        className={`max-w-[85%] sm:max-w-[320px] rounded-2xl text-sm overflow-hidden ${
+                          msg.isMe
+                            ? "chat-bubble-me rounded-br-md"
+                            : "chat-bubble-them rounded-bl-md border border-[#E2E8F0]"
+                        }`}
+                      >
+                        <div className={`px-4 py-3 ${msg.isMe ? "bg-gradient-to-r from-[#7C3AED] to-[#6D28D9]" : "bg-gradient-to-r from-[#F5F3FF] to-[#EDE9FE]"}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <DollarSign className={`w-4 h-4 ${msg.isMe ? "text-purple-200" : "text-[#7C3AED]"}`} />
+                            <span className={`font-bold text-base ${msg.isMe ? "text-white" : "text-[#1A1A2E]"}`}>
+                              {payAmount || msg.paymentAmount || ""} {payCurrency || "USDC"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <EyeOff className={`w-3 h-3 ${msg.isMe ? "text-purple-300" : "text-[#7C3AED]/60"}`} />
+                            <span className={`text-[11px] ${msg.isMe ? "text-purple-200" : "text-[#7C3AED]/70"}`}>
+                              Private Payment via MagicBlock
+                            </span>
+                          </div>
+                          {payTxSig && (
+                            <a
+                              href={`https://solscan.io/tx/${payTxSig}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`text-[10px] mt-1 block underline ${msg.isMe ? "text-purple-200/80" : "text-[#7C3AED]/50"}`}
+                            >
+                              tx: {payTxSig.slice(0, 12)}...
+                            </a>
+                          )}
+                        </div>
+                        <div className={`px-4 py-1.5 flex items-center gap-1 ${msg.isMe ? "bg-[#6D28D9]" : "bg-[#EDE9FE]"}`}>
+                          <span className={`text-[10px] ${msg.isMe ? "text-purple-200" : "text-[#94A3B8]"}`}>
+                            {Number(msg.timestamp) > 0 ? timeAgo(Number(msg.timestamp) * 1000) : "now"}
+                          </span>
+                          <Shield className={`w-2 h-2 ${msg.isMe ? "text-purple-300" : "text-[#7C3AED]"}`} />
+                        </div>
+                      </div>
+                    ) : (
                     <div
                       className={`max-w-[85%] sm:max-w-[320px] px-3.5 sm:px-4 py-2.5 rounded-2xl text-sm ${
                         msg.isMe
@@ -686,6 +883,7 @@ export default function Chat() {
                         )}
                       </div>
                     </div>
+                    )}
                   </div>
                 );
               })}
@@ -694,9 +892,142 @@ export default function Chat() {
 
 
 
+            {/* Payment Panel */}
+            {showPayment && (
+              <div className="border-t border-[#E2E8F0] bg-gradient-to-b from-[#F5F3FF] to-white px-3 py-3">
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <DollarSign className="w-4 h-4 text-[#7C3AED]" />
+                    <span className="text-sm font-semibold text-[#1A1A2E]">Send Payment</span>
+                  </div>
+                  <button onClick={() => { setShowPayment(false); setPaymentAmount(""); resetMb(); resetSol(); }} className="p-1 rounded-lg hover:bg-[#E2E8F0] transition-colors">
+                    <X className="w-4 h-4 text-[#94A3B8]" />
+                  </button>
+                </div>
+
+                {/* Privacy Toggle */}
+                <div className="flex gap-1.5 mb-2.5">
+                  <button
+                    onClick={() => setPaymentMode("private")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      paymentMode === "private"
+                        ? "bg-[#7C3AED] text-white shadow-sm"
+                        : "bg-[#F1F5F9] text-[#64748B] hover:bg-[#E2E8F0]"
+                    }`}
+                  >
+                    <EyeOff className="w-3 h-3" />
+                    Private USDC
+                  </button>
+                  <button
+                    onClick={() => setPaymentMode("public")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      paymentMode === "public"
+                        ? "bg-[#2563EB] text-white shadow-sm"
+                        : "bg-[#F1F5F9] text-[#64748B] hover:bg-[#E2E8F0]"
+                    }`}
+                  >
+                    <Eye className="w-3 h-3" />
+                    Public SOL
+                  </button>
+                </div>
+
+                {/* Amount Input */}
+                <div className="flex items-center gap-2 mb-2.5">
+                  <div className="flex-1 relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#94A3B8] font-medium">
+                      {paymentMode === "private" ? "$" : "◎"}
+                    </span>
+                    <input
+                      type="number"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      placeholder={paymentMode === "private" ? "0.00 USDC" : "0.00 SOL"}
+                      step="0.01"
+                      min="0"
+                      className="w-full bg-white border border-[#E2E8F0] rounded-xl pl-7 pr-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/20 focus:border-[#7C3AED]"
+                      disabled={paymentSending}
+                    />
+                  </div>
+                  <button
+                    onClick={handleSendPayment}
+                    disabled={!paymentAmount || parseFloat(paymentAmount) <= 0 || paymentSending}
+                    className={`h-10 px-4 rounded-xl text-white text-sm font-medium flex items-center gap-1.5 transition-all disabled:opacity-40 ${
+                      paymentMode === "private"
+                        ? "bg-[#7C3AED] hover:bg-[#6D28D9]"
+                        : "bg-[#2563EB] hover:bg-[#1D4ED8]"
+                    }`}
+                  >
+                    {paymentSending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    Send
+                  </button>
+                </div>
+
+                {/* Quick Amounts */}
+                <div className="flex gap-1.5 mb-2">
+                  {(paymentMode === "private" ? [1, 5, 10, 25] : [0.1, 0.5, 1, 5]).map((amt) => (
+                    <button
+                      key={amt}
+                      onClick={() => setPaymentAmount(amt.toString())}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-medium bg-white border border-[#E2E8F0] text-[#64748B] hover:bg-[#F1F5F9] hover:border-[#7C3AED]/30 transition-all"
+                    >
+                      {paymentMode === "private" ? `$${amt}` : `${amt} ◎`}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Step Indicator */}
+                {paymentSending && (
+                  <div className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-[#7C3AED]/5">
+                    <Loader2 className="w-3 h-3 text-[#7C3AED] animate-spin flex-shrink-0" />
+                    <span className="text-[11px] text-[#7C3AED] font-medium">
+                      {paymentMode === "private"
+                        ? mbStep === "building" ? "Building private transaction..."
+                          : mbStep === "signing" ? "Sign in your wallet..."
+                          : mbStep === "sending" ? "Sending via MagicBlock..."
+                          : mbStep === "confirming" ? "Confirming on-chain..."
+                          : mbStep === "done" ? "Recording in chat..."
+                          : "Processing..."
+                        : solStep === "sending" ? "Sending SOL..."
+                          : solStep === "confirming" ? "Confirming..."
+                          : solStep === "recording" ? "Recording..."
+                          : solStep === "done" ? "Recording in chat..."
+                          : "Processing..."
+                      }
+                    </span>
+                  </div>
+                )}
+
+                {/* Privacy Info */}
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Shield className="w-3 h-3 text-[#94A3B8]" />
+                  <span className="text-[10px] text-[#94A3B8]">
+                    {paymentMode === "private"
+                      ? "Private via MagicBlock TEE — amount hidden on-chain"
+                      : "Public SOL transfer — visible on-chain"
+                    }
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Message Input */}
             <div className="p-2.5 sm:p-3 border-t border-[#E2E8F0] bg-white">
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setShowPayment(!showPayment); resetMb(); resetSol(); }}
+                  className={`touch-active w-10 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${
+                    showPayment
+                      ? "bg-[#7C3AED] text-white"
+                      : "bg-[#F1F5F9] text-[#64748B] hover:bg-[#E2E8F0]"
+                  }`}
+                  title="Send payment"
+                >
+                  <DollarSign className="w-4 h-4" />
+                </button>
                 <input
                   type="text"
                   value={messageText}
