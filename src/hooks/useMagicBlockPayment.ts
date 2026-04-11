@@ -193,7 +193,19 @@ export function useMagicBlockPayment() {
       } catch (err: any) {
         console.error("MagicBlock payment error:", err);
         setStep("error");
-        const msg = err?.message || "Private payment failed";
+
+        // Parse common errors into user-friendly messages
+        const raw = err?.message || "Private payment failed";
+        let msg = raw;
+        if (raw.includes("insufficient funds") || raw.includes("custom program error: 0x1")) {
+          msg = "Insufficient USDC balance. Please add USDC to your wallet and try again.";
+        } else if (raw.includes("User exited") || raw.includes("user rejected") || raw.includes("Failed to connect to wallet")) {
+          msg = "Transaction cancelled.";
+          setStep("idle"); // Not a real error — user just dismissed the modal
+          return null;
+        } else if (raw.includes("TRANSACTION_TOO_LARGE")) {
+          msg = "Transaction too large. Try again — recipient accounts may need initialization.";
+        }
         setError(msg);
 
         addPayment({

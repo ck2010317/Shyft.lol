@@ -442,7 +442,11 @@ export default function Chat() {
       const txSig = result?.transferSig || null;
 
       if (!txSig) {
-        toast("error", "Payment failed", mbError || "Transaction was not completed");
+        // Don't show error toast if user just cancelled
+        const errMsg = mbError || "Transaction was not completed";
+        if (!errMsg.includes("cancelled")) {
+          toast("error", "Payment failed", errMsg);
+        }
         setPaymentSending(false);
         return;
       }
