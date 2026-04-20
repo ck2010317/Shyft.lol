@@ -1071,7 +1071,7 @@ function PollCard({
             <BarChart3 className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
             <span className="text-xs font-medium text-purple-500">Poll</span>
           </div>
-          <div className="flex items-center gap-2 text-xs text-[#94A3B8]">
+          <div className="flex items-center gap-2 text-xs text-[#64748B]">
             <span>{timeAgo(poll.createdAt)}</span>
             <span>·</span>
             <div className="flex items-center gap-1">
@@ -1086,7 +1086,7 @@ function PollCard({
           <button
             onClick={handleClose}
             disabled={closing}
-            className="text-xs text-[#94A3B8] hover:text-red-500 transition-colors px-2 py-1"
+            className="text-xs text-[#64748B] hover:text-red-500 transition-colors px-2 py-1"
           >
             {closing ? "Closing..." : "End Poll"}
           </button>
@@ -1139,7 +1139,7 @@ function PollCard({
                 </div>
                 {showResults && (
                   <span className={`text-sm font-bold flex-shrink-0 ml-2 ${
-                    isWinner ? "text-purple-600" : "text-[#94A3B8]"
+                    isWinner ? "text-purple-600" : "text-[#475569]"
                   }`}>
                     {pct}%
                   </span>
@@ -1152,7 +1152,7 @@ function PollCard({
 
       {/* Footer */}
       <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[#F1F5F9]">
-        <span className="text-xs text-[#94A3B8]">
+        <span className="text-xs text-[#64748B]">
           {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
         </span>
         {voting && (
