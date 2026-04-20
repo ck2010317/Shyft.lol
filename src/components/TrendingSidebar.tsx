@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TrendingUp, Heart, MessageCircle, Flame, Users, Hash } from "lucide-react";
+import { TrendingUp, Heart, MessageCircle, Flame, Users } from "lucide-react";
 import { useProgram } from "@/hooks/useProgram";
 import { useWallet } from "@/hooks/usePrivyWallet";
 import ProfileHoverCard from "@/components/ProfileHoverCard";
@@ -233,28 +233,6 @@ export default function TrendingSidebar() {
           </div>
         </div>
       )}
-
-      {/* Platform Stats */}
-      <div className="bg-white rounded-2xl border border-[#E2E8F0] px-4 py-3">
-        <div className="flex items-center gap-2 mb-3">
-          <Hash className="w-4 h-4 text-[#16A34A]" />
-          <span className="text-sm font-bold text-[#1A1A2E]">Shyft Stats</span>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="text-center">
-            <p className="text-lg font-bold text-[#1A1A2E]">{stats.posts}</p>
-            <p className="text-[10px] text-[#94A3B8]">Posts</p>
-          </div>
-          <div className="text-center">
-            <p className="text-lg font-bold text-[#1A1A2E]">{stats.users}</p>
-            <p className="text-[10px] text-[#94A3B8]">Users</p>
-          </div>
-          <div className="text-center">
-            <p className="text-lg font-bold text-[#1A1A2E]">{stats.polls}</p>
-            <p className="text-[10px] text-[#94A3B8]">Polls</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
