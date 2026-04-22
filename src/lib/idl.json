@@ -1481,6 +1481,9 @@
         },
         {
           "name": "user",
+          "docs": [
+            "Must be the profile owner — prevents others from kicking members"
+          ],
           "writable": true,
           "signer": true
         },
@@ -1560,11 +1563,51 @@
           }
         },
         {
+          "name": "like_record",
+          "docs": [
+            "One LikeRecord PDA per (post, liker) — init will fail if they've already liked"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "post"
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
           "name": "user",
           "docs": [
-            "The liker — must be the profile owner"
+            "The liker — must be the profile owner (read-only, no SOL needed)"
           ],
           "signer": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Treasury pays for like_record rent"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -2268,6 +2311,19 @@
       ]
     },
     {
+      "name": "LikeRecord",
+      "discriminator": [
+        179,
+        237,
+        53,
+        5,
+        91,
+        236,
+        161,
+        50
+      ]
+    },
+    {
       "name": "Membership",
       "discriminator": [
         231,
@@ -2414,6 +2470,21 @@
       "code": 6010,
       "name": "PollAlreadyEnded",
       "msg": "Poll has ended"
+    },
+    {
+      "code": 6011,
+      "name": "AlreadyLiked",
+      "msg": "Already liked this post"
+    },
+    {
+      "code": 6012,
+      "name": "CannotLikeOwnPost",
+      "msg": "Cannot like your own post"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidReactionType",
+      "msg": "Invalid reaction type"
     }
   ],
   "types": [
@@ -2521,6 +2592,26 @@
           {
             "name": "following",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LikeRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "post",
+            "type": "pubkey"
+          },
+          {
+            "name": "liker",
+            "type": "pubkey"
+          },
+          {
+            "name": "liked_at",
+            "type": "i64"
           }
         ]
       }
