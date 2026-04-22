@@ -1666,8 +1666,10 @@ export default function Feed() {
           {/* Merge posts and polls into a single timeline sorted by createdAt */}
           {(() => {
             const feedItems: { type: "post" | "poll"; data: any; createdAt: number }[] = [
+              // posts: createdAt is unix seconds on-chain → convert to ms
               ...onchainPosts.map(p => ({ type: "post" as const, data: p, createdAt: Number(p.createdAt) * 1000 })),
-              ...allPolls.map(p => ({ type: "poll" as const, data: p, createdAt: p.createdAt })),
+              // polls: createdAt already converted to ms in getAllPolls()
+              ...allPolls.map(p => ({ type: "poll" as const, data: p, createdAt: Number(p.createdAt) })),
             ].sort((a, b) => b.createdAt - a.createdAt);
 
             return feedItems.map((item) => {

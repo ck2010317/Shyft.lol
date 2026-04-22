@@ -253,7 +253,7 @@ const actions: Record<string, ActionHandler> = {
     const [likeRecordPda] = getLikeRecordPda(postPda, user);
     return program.methods
       .likePost(new BN(postId))
-      .accountsPartial({ post: postPda, profile: profilePda, likeRecord: likeRecordPda, user, systemProgram: SystemProgram.programId })
+      .accountsPartial({ post: postPda, profile: profilePda, likeRecord: likeRecordPda, user, payer: treasury, systemProgram: SystemProgram.programId })
       .instruction();
   },
 

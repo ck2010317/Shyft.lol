@@ -518,15 +518,18 @@ pub struct LikePost<'info> {
     /// One LikeRecord PDA per (post, liker) — init will fail if they've already liked
     #[account(
         init,
-        payer = user,
+        payer = payer,
         space = 8 + LikeRecord::LEN,
         seeds = [LIKE_SEED, post.key().as_ref(), user.key().as_ref()],
         bump
     )]
     pub like_record: Account<'info, LikeRecord>,
-    /// The liker — must be the profile owner
-    #[account(mut, constraint = user.key() == profile.owner @ ShadowError::Unauthorized)]
+    /// The liker — must be the profile owner (read-only, no SOL needed)
+    #[account(constraint = user.key() == profile.owner @ ShadowError::Unauthorized)]
     pub user: Signer<'info>,
+    /// Treasury pays for like_record rent
+    #[account(mut)]
+    pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
