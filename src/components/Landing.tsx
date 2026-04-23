@@ -114,7 +114,8 @@ export default function Landing() {
           <button
             onClick={login}
             disabled={!ready}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all disabled:opacity-50 shadow-lg ${isDark ? "bg-white hover:bg-white/90 text-[#000000]" : "bg-[#2563EB] hover:bg-[#1D4ED8] text-white"}`}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all disabled:opacity-50 shadow-lg ${isDark ? "" : "bg-[#2563EB] hover:bg-[#1D4ED8] text-white"}`}
+            style={isDark ? { backgroundColor: '#ffffff', color: '#000000' } : {}}
           >
             Sign In
           </button>
@@ -153,7 +154,8 @@ export default function Landing() {
             <button
               onClick={login}
               disabled={!ready}
-              className={`w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 text-sm font-semibold rounded-xl transition-all disabled:opacity-50 shadow-xl ${isDark ? "bg-white hover:bg-white/90 text-[#000000] shadow-white/10" : "bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-blue-200"}`}
+              className={`w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 text-sm font-semibold rounded-xl transition-all disabled:opacity-50 shadow-xl ${isDark ? "shadow-white/10" : "bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-blue-200"}`}
+              style={isDark ? { backgroundColor: '#ffffff', color: '#000000' } : {}}
             >
               <Wallet className="w-4 h-4" /> Get Started Free
             </button>
@@ -187,7 +189,7 @@ export default function Landing() {
 
       {/* Live Stats */}
       {stats && (
-        <div className={`px-4 sm:px-6 py-10 border-t ${isDark ? "border-white/5 bg-white/[0.02]" : "border-[#E2E8F0] bg-white"}`}>
+        <div className={`px-4 sm:px-6 py-10 border-t ${isDark ? "border-white/5" : "border-[#E2E8F0] bg-white"}`}>
           <div className="max-w-3xl mx-auto">
             <div className="flex items-center justify-center gap-2 mb-6">
               <Activity className="w-3.5 h-3.5 text-[#16A34A]" />
@@ -199,7 +201,7 @@ export default function Landing() {
                 { label: "Profiles", value: stats.profiles, color: "#2563EB" },
                 { label: "Transactions", value: stats.transactions, color: "#16A34A" },
               ].map((stat, i) => (
-                <div key={i} className={`rounded-2xl border p-4 text-center ${isDark ? "bg-white/5 border-white/10" : "bg-[#F8FAFC] border-[#E2E8F0]"}`}>
+                <div key={i} className={`rounded-2xl border p-4 text-center ${isDark ? "border-white/10" : "bg-[#F8FAFC] border-[#E2E8F0]"}`}>
                   <p className="text-2xl sm:text-3xl font-bold" style={{ color: stat.color }}>
                     {stat.value.toLocaleString()}
                   </p>
@@ -237,8 +239,8 @@ export default function Landing() {
                     onClick={() => setActiveFeature(i)}
                     className={`touch-active w-full text-left p-4 rounded-2xl border transition-all duration-300 ${
                       isActive
-                        ? isDark ? "bg-white/8 border-white/20 shadow-lg" : "bg-white border-[#2563EB]/20 shadow-lg shadow-blue-100"
-                        : isDark ? "bg-white/[0.03] border-white/5 hover:bg-white/5" : "bg-[#F8FAFC] border-[#E2E8F0] hover:bg-white"
+                        ? isDark ? "border-white/20 shadow-lg" : "bg-white border-[#2563EB]/20 shadow-lg shadow-blue-100"
+                        : isDark ? "border-white/5 hover:border-white/10" : "bg-[#F8FAFC] border-[#E2E8F0] hover:bg-white"
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -264,10 +266,10 @@ export default function Landing() {
             </div>
 
             {/* Feature preview card */}
-            <div className={`rounded-2xl border p-5 min-h-[280px] sm:min-h-[360px] flex items-center justify-center ${isDark ? "bg-white/5 border-white/10" : "bg-[#F8FAFC] border-[#E2E8F0]"}`}>
+            <div className={`rounded-2xl border p-5 min-h-[280px] sm:min-h-[360px] flex items-center justify-center ${isDark ? "border-white/10" : "bg-[#F8FAFC] border-[#E2E8F0]"}`}>
               {features[activeFeature].preview.type === "post" && (
                 <div className="w-full animate-fade-in">
-                  <div className={`rounded-xl border p-4 ${isDark ? "bg-white/5 border-white/10" : "bg-white border-[#E2E8F0] shadow-sm"}`}>
+                  <div className={`rounded-xl border p-4 ${isDark ? "border-white/10" : "bg-white border-[#E2E8F0] shadow-sm"}`}>
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#EBF4FF] to-[#E0F2FE] flex items-center justify-center text-lg">😎</div>
                       <div>
@@ -288,7 +290,7 @@ export default function Landing() {
               )}
               {features[activeFeature].preview.type === "chat" && (
                 <div className="w-full space-y-3 animate-fade-in">
-                  <div className={`rounded-xl border overflow-hidden ${isDark ? "bg-white/5 border-white/10" : "bg-white border-[#E2E8F0]"}`}>
+                  <div className={`rounded-xl border overflow-hidden ${isDark ? "border-white/10" : "bg-white border-[#E2E8F0]"}`}>
                     <div className={`px-4 py-3 border-b flex items-center gap-2 ${isDark ? "border-white/5" : "border-[#F1F5F9]"}`}>
                       <div className="w-8 h-8 rounded-full bg-[#EBF4FF] flex items-center justify-center text-sm">👩</div>
                       <div>
@@ -312,7 +314,7 @@ export default function Landing() {
               )}
               {features[activeFeature].preview.type === "payment" && (
                 <div className="w-full animate-fade-in">
-                  <div className={`rounded-xl border p-5 ${isDark ? "bg-white/5 border-white/10" : "bg-white border-[#E2E8F0]"}`}>
+                  <div className={`rounded-xl border p-5 ${isDark ? "border-white/10" : "bg-white border-[#E2E8F0]"}`}>
                     <div className="flex items-center gap-2 mb-4">
                       <Wallet className="w-5 h-5 text-[#2563EB]" />
                       <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-[#1A1A2E]"}`}>Send SOL Instantly</p>
@@ -321,7 +323,7 @@ export default function Landing() {
                       {(features[activeFeature].preview as any).steps.map((step: string, j: number) => (
                         <div key={j} className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${j < 2 ? "bg-[#2563EB]" : "bg-[#16A34A]"}`}>{j + 1}</div>
-                          <div className={`flex-1 rounded-lg px-3 py-2 ${isDark ? "bg-white/5" : "bg-[#F8FAFC]"}`}>
+                          <div className={`flex-1 rounded-lg px-3 py-2 border ${isDark ? "border-white/5" : "bg-[#F8FAFC] border-transparent"}`}>
                             <p className={`text-xs font-medium ${isDark ? "text-white/70" : "text-[#1A1A2E]"}`}>{step}</p>
                           </div>
                         </div>
@@ -332,14 +334,14 @@ export default function Landing() {
               )}
               {features[activeFeature].preview.type === "follows" && (
                 <div className="w-full animate-fade-in">
-                  <div className={`rounded-xl border p-5 ${isDark ? "bg-white/5 border-white/10" : "bg-white border-[#E2E8F0]"}`}>
+                  <div className={`rounded-xl border p-5 ${isDark ? "border-white/10" : "bg-white border-[#E2E8F0]"}`}>
                     <div className="flex items-center gap-2 mb-4">
                       <Users className="w-5 h-5 text-[#16A34A]" />
                       <p className={`text-sm font-semibold ${isDark ? "text-white" : "text-[#1A1A2E]"}`}>On-Chain Follow Network</p>
                     </div>
                     <div className="space-y-2.5">
                       {["Alice.sol", "Bob.sol", "Charlie.sol"].map((name, j) => (
-                        <div key={j} className={`flex items-center gap-3 p-2.5 rounded-xl ${isDark ? "bg-white/5" : "bg-[#F8FAFC]"}`}>
+                        <div key={j} className={`flex items-center gap-3 p-2.5 rounded-xl border ${isDark ? "border-white/5" : "bg-[#F8FAFC] border-transparent"}`}>
                           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#EBF4FF] to-[#E0F2FE] flex items-center justify-center text-sm">
                             {["👩", "👨", "🧑"][j]}
                           </div>
@@ -389,9 +391,9 @@ export default function Landing() {
                   </div>
                 ))}
               </div>
-              <div className={`flex items-center gap-2 p-3 rounded-xl border w-fit ${isDark ? "bg-white/5 border-white/10" : "bg-[#F0FDF4] border-[#DCFCE7]"}`}>
-                <div className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse" />
-                <span className={`text-xs ${isDark ? "text-white/50" : "text-[#15803D]"}`}>Available now · TestFlight beta</span>
+              <div className={`flex items-center gap-2 p-3 rounded-xl border w-fit ${isDark ? "border-white/10" : "bg-[#FEF3C7] border-[#FDE68A]"}`}>
+                <div className="w-2 h-2 rounded-full bg-[#F59E0B] animate-pulse" />
+                <span className={`text-xs ${isDark ? "text-white/50" : "text-[#92400E]"}`}>Coming Soon · TestFlight</span>
               </div>
             </div>
 
@@ -470,8 +472,8 @@ export default function Landing() {
               { num: "2", color: "#16A34A", bg: isDark ? "from-green-500/10" : "from-green-50", title: "Everything lives on Solana", desc: "Posts, profiles, follows, chats — all on-chain. Your data is permanent and owned by you." },
               { num: "3", color: "#7C3AED", bg: isDark ? "from-purple-500/10" : "from-purple-50", title: "Gas fees? We got you", desc: "The platform sponsors all transaction fees. Use Shyft without ever needing SOL in your wallet." },
             ].map((step, i) => (
-              <div key={i} className={`bg-gradient-to-b ${step.bg} to-transparent rounded-2xl p-5 border text-left ${isDark ? "border-white/10" : "border-[#E2E8F0] bg-white shadow-sm"}`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${isDark ? "bg-white/5" : "bg-white shadow-sm border border-[#E2E8F0]"}`}>
+              <div key={i} className={`rounded-2xl p-5 border text-left ${isDark ? "border-white/10" : `bg-gradient-to-b ${step.bg} to-transparent border-[#E2E8F0] bg-white shadow-sm`}`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 border ${isDark ? "border-white/10" : "bg-white shadow-sm border-[#E2E8F0]"}`}>
                   <span className="text-lg font-bold" style={{ color: step.color }}>{step.num}</span>
                 </div>
                 <h4 className={`text-sm font-semibold mb-2 ${isDark ? "text-white" : "text-[#1A1A2E]"}`}>{step.title}</h4>
@@ -519,7 +521,8 @@ export default function Landing() {
           <button
             onClick={login}
             disabled={!ready}
-            className={`flex items-center gap-2 px-8 py-4 text-base font-semibold rounded-xl transition-all disabled:opacity-50 shadow-2xl mx-auto ${isDark ? "bg-white hover:bg-white/90 text-[#000000] shadow-white/10" : "bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-blue-200"}`}
+            className={`flex items-center gap-2 px-8 py-4 text-base font-semibold rounded-xl transition-all disabled:opacity-50 shadow-2xl mx-auto ${isDark ? "shadow-white/10" : "bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-blue-200"}`}
+            style={isDark ? { backgroundColor: '#ffffff', color: '#000000' } : {}}
           >
             <Wallet className="w-5 h-5" /> Get Started — It&apos;s Free
           </button>
