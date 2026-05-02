@@ -391,12 +391,14 @@ export default function Chat() {
       }
 
       // ===== STEP 1: Ensure our encryption key is published FIRST =====
-      // This is the ONLY place key publishing happens (not in loadMessages) to prevent index races
+      // Always verify on-chain when there's no confirmed peer key yet (don't trust in-memory cache alone)
       const myAddr = publicKey.toBase58();
       console.log(`📤 handleSend: chatId=${chatInfo.chatId}, exists=${chatInfo.exists}, myAddr=${myAddr.slice(0,8)}...`);
-      console.log(`📤 handleSend: keyPublishedChats has chatId? ${keyPublishedChats.current.has(chatInfo.chatId)}`);
-      
-      if (chatInfo.exists && !keyPublishedChats.current.has(chatInfo.chatId)) {
+
+      const skipKeyCheck = keyPublishedChats.current.has(chatInfo.chatId) && peerPubKey !== null;
+      console.log(`📤 handleSend: skipKeyCheck=${skipKeyCheck} (cached=${keyPublishedChats.current.has(chatInfo.chatId)}, hasPeerKey=${peerPubKey !== null})`);
+
+      if (chatInfo.exists && !skipKeyCheck) {
         try {
           const hasMyKey = await program.findMyEncryptionKey(chatInfo.chatId, myAddr);
           console.log(`📤 handleSend: findMyEncryptionKey result: ${hasMyKey}`);
@@ -413,7 +415,6 @@ export default function Chat() {
           }
         } catch (keyErr) {
           console.error("❌ handleSend: Key publish failed:", keyErr);
-          // Continue anyway — message can still be sent as plaintext
         }
       }
 
