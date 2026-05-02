@@ -1124,6 +1124,8 @@ export class ShyftClient {
   }[]> {
     const rawMessages = await this.getMessagesForChat(chatId);
 
+    console.log(`getDecryptedMessages: chatId=${chatId}, myAddr=${myAddress.slice(0,8)}..., msgs=${rawMessages.length}, peerKeyLen=${peerPublicKey.length}`);
+
     return rawMessages.map((msg: any) => {
       const isMe = msg.sender === myAddress;
       const isKeyEx = isPubkeyMessage(msg.content);
@@ -1137,6 +1139,9 @@ export class ShyftClient {
       } else if (isEnc) {
         // E2E encrypted — decrypt with peer's public + our secret
         decrypted = naclDecrypt(msg.content, peerPublicKey, mySecretKey);
+        if (!decrypted) {
+          console.warn(`  ❌ Decrypt FAILED for msg[${msg.messageIndex}] sender=${msg.sender?.toString().slice(0,8)}... isMe=${isMe}`);
+        }
       }
 
       return {

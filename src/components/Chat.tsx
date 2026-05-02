@@ -159,7 +159,9 @@ export default function Chat() {
         };
         const keys = await deriveEncryptionKeypair(publicKey.toBase58(), signMessage);
         setEncryptionKeys(keys);
-        console.log("🔑 E2E encryption keys derived");
+        // Log derived pubkey so we can verify it matches what's published on-chain
+        const pubKeyB64 = btoa(String.fromCharCode(...keys.publicKey));
+        console.log("🔑 E2E encryption keys derived, myPubKey(b64)=", pubKeyB64);
       } catch (err: any) {
         console.error("Failed to derive encryption keys:", err);
         toast("error", "Encryption key error", "Could not derive encryption keys. Try reconnecting.");
