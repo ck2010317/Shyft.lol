@@ -1017,9 +1017,18 @@ export class ShyftClient {
    */
   private _peerKeyCache = new Map<string, Uint8Array>();
 
+  /** Clear cached peer key for a chat — forces next findPeerEncryptionKey to re-scan */
+  clearPeerKeyCache(chatId: number, myAddress: string): void {
+    this._peerKeyCache.delete(`${chatId}:${myAddress}`);
+  }
+
   async findPeerEncryptionKey(chatId: number, myAddress: string): Promise<Uint8Array | null> {
-    // NOTE: do NOT use cache here — always re-scan so we pick up re-published keys
-    // (a peer may have re-derived their keypair and published a new PUBKEY at a higher index)
+    // Use cache within a session to avoid hammering RPC with 60 calls per poll.
+    // Cache is on the program instance (recreated on page reload), so it's safe.
+    const cacheKey = `${chatId}:${myAddress}`;
+    if (this._peerKeyCache.has(cacheKey)) {
+      return this._peerKeyCache.get(cacheKey)!;
+    }
 
     console.log(`findPeerEncryptionKey: chatId=${chatId}, myAddr=${myAddress.slice(0, 8)}...`);
 
@@ -1059,7 +1068,6 @@ export class ShyftClient {
 
     if (lastFoundKey) {
       console.log(`  ✅ Using peer key from msg[${lastFoundIdx}] (most recent)`);
-      const cacheKey = `${chatId}:${myAddress}`;
       this._peerKeyCache.set(cacheKey, lastFoundKey);
       return lastFoundKey;
     }

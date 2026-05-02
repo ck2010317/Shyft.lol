@@ -118,10 +118,20 @@ export default function Chat() {
   const [callMode, setCallMode] = useState<"voice" | "video" | null>(null);
   const [incomingCall, setIncomingCall] = useState<{ mode: "voice" | "video"; from: string } | null>(null);
   const seenCallMessages = useRef(new Set<string>());
+  const lastCallSentRef = useRef<number>(0); // timestamp of last call signal sent
 
   // Send a CALL signal message in chat, then open the modal
   const handleStartCall = async (mode: "voice" | "video") => {
     if (!activeChat || !program || !publicKey) return;
+
+    // Debounce: prevent sending duplicate call signals within 10 seconds
+    const now = Date.now();
+    if (now - lastCallSentRef.current < 10000) {
+      setCallMode(mode);
+      return;
+    }
+    lastCallSentRef.current = now;
+
     const myAddr = publicKey.toBase58();
     const roomName = getCallRoomName(myAddr, activeChat.friend.address);
     const callContent = `CALL:${mode}:${roomName}`;
@@ -337,12 +347,12 @@ export default function Chat() {
 
     // Poll, but skip if previous call is still running
     const loadingRef = { current: false };
-    pollRef.current = setInterval(async () => {
+    pollRef.current = setInterval(async () => { // 30s interval
       if (loadingRef.current) return;
       loadingRef.current = true;
       await loadMessages(activeChat);
       loadingRef.current = false;
-    }, 15000);
+    }, 30000);
 
     return () => {
       if (pollRef.current) {
@@ -798,7 +808,13 @@ export default function Chat() {
                 </button>
                 {activeChat.exists && (
                   <button
-                    onClick={() => loadMessages(activeChat)}
+                    onClick={() => {
+                      // Clear peer key cache so refresh forces a full re-scan
+                      if (program && publicKey) {
+                        program.clearPeerKeyCache(activeChat.chatId, publicKey.toBase58());
+                      }
+                      loadMessages(activeChat);
+                    }}
                     disabled={loadingMessages}
                     className="w-8 h-8 rounded-lg hover:bg-[#F1F5F9] flex items-center justify-center"
                   >
