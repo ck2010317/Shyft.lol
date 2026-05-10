@@ -5,6 +5,7 @@ import { TrendingUp, Heart, MessageCircle, Flame, Users } from "lucide-react";
 import { useProgram } from "@/hooks/useProgram";
 import { useWallet } from "@/hooks/usePrivyWallet";
 import ProfileHoverCard from "@/components/ProfileHoverCard";
+import { useAppStore } from "@/lib/store";
 
 /** Parse paid post prefix */
 function parsePaidContent(content: string): string {
@@ -41,6 +42,7 @@ interface TrendingPost {
 export default function TrendingSidebar() {
   const program = useProgram();
   const { publicKey } = useWallet();
+  const { navigateToProfile } = useAppStore();
   const [trending, setTrending] = useState<TrendingPost[]>([]);
   const [topCreators, setTopCreators] = useState<any[]>([]);
   const [stats, setStats] = useState({ posts: 0, users: 0, polls: 0 });
@@ -205,8 +207,12 @@ export default function TrendingSidebar() {
                 key={creator.owner}
                 walletAddress={creator.owner}
                 profile={creator}
+                wrapperClassName="block w-full"
               >
-                <div className="px-4 py-2.5 hover:bg-[#F8FAFC] transition-colors cursor-pointer">
+                <div
+                  onClick={() => navigateToProfile(creator.owner)}
+                  className="px-4 py-2.5 hover:bg-[#F8FAFC] transition-colors cursor-pointer"
+                >
                   <div className="flex items-center gap-2.5">
                     {creator.avatarUrl ? (
                       <img src={creator.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />

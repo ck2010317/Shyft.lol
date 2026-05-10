@@ -89,9 +89,10 @@ export async function POST(request: NextRequest) {
 
     // Upload to Pinata IPFS
     const upload = await pinata.upload.public.file(file);
-    // Use dweb.link (Protocol Labs CDN) — works globally without VPN
+    const gateway = (process.env.PINATA_GATEWAY || "gateway.pinata.cloud").trim();
+    // Include original filename so the URL has a file extension (needed for video detection)
     const safeName = file.name?.replace(/[^a-zA-Z0-9._-]/g, "_") || (isVideo ? "video.mp4" : "image.png");
-    const url = `https://dweb.link/ipfs/${upload.cid}/${safeName}`;
+    const url = `https://${gateway}/ipfs/${upload.cid}/${safeName}`;
 
     return NextResponse.json({
       url,

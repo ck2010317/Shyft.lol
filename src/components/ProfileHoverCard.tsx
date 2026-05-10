@@ -25,9 +25,11 @@ interface ProfileHoverCardProps {
   } | null | undefined;
   /** Children to wrap (the trigger element) */
   children: React.ReactNode;
+  /** Optional wrapper className override (default: inline-flex) */
+  wrapperClassName?: string;
 }
 
-export default function ProfileHoverCard({ walletAddress, profile, children }: ProfileHoverCardProps) {
+export default function ProfileHoverCard({ walletAddress, profile, children, wrapperClassName }: ProfileHoverCardProps) {
   const [show, setShow] = useState(false);
   const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,7 +75,7 @@ export default function ProfileHoverCard({ walletAddress, profile, children }: P
   return (
     <div
       ref={containerRef}
-      className="relative inline-flex"
+      className={`relative ${wrapperClassName || "inline-flex"}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >

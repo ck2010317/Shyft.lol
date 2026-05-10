@@ -15,6 +15,7 @@ import Tokens from "@/components/Tokens";
 import Communities from "@/components/Communities";
 import TrendingSidebar from "@/components/TrendingSidebar";
 import AI from "@/components/AI";
+import FloatingAIButton from "@/components/FloatingAIButton";
 import ToastContainer from "@/components/Toast";
 import Landing from "@/components/Landing";
 import OnboardingDemo from "@/components/OnboardingDemo";
@@ -127,6 +128,7 @@ export default function Home() {
         </main>
       </div>
       <MobileNav />
+      <FloatingAIButton />
     </>
   );
 }

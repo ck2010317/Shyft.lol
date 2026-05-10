@@ -25,13 +25,13 @@ const VIDEO_EXTS = /\.(mp4|webm|ogg|mov)(\?.*)?$/i;
 /* ── IPFS URLs (Pinata, etc.) ── */
 const IPFS_URL = /\.mypinata\.cloud\/ipfs\/|ipfs\.io\/ipfs\/|cloudflare-ipfs\.com\/ipfs\/|gateway\.pinata\.cloud\/ipfs\//i;
 
-/** Rewrite any IPFS gateway URL to dweb.link (globally distributed, works without VPN) */
+/** Rewrite any IPFS gateway URL to dedicated Pinata gateway to avoid rate limits */
 function normalizeIpfsUrl(url: string): string {
   const match = url.match(/\/ipfs\/([a-zA-Z0-9]+)(\/[^?#]*)?(\?.*)?$/i);
   if (match) {
     const cid = match[1];
     const path = match[2] || "";
-    return `https://dweb.link/ipfs/${cid}${path}`;
+    return `https://gateway.pinata.cloud/ipfs/${cid}`;
   }
   return url;
 }
@@ -163,10 +163,10 @@ export function RichContent({ content, className = "" }: RichContentProps) {
       {videoUrls.map((url, i) => (
         <div key={i} className="mt-3 rounded-2xl overflow-hidden border border-[#E2E8F0]">
           <video
-            src={url}
+            src={IPFS_URL.test(url) ? normalizeIpfsUrl(url) : url}
             controls
             preload="metadata"
-            className="w-full max-h-[400px] object-contain bg-black"
+            className="w-full max-h-[280px] sm:max-h-[400px] object-contain bg-black"
           />
         </div>
       ))}
@@ -195,7 +195,7 @@ function ImagePreview({ url, single }: { url: string; single: boolean }) {
       onClick={(e) => e.stopPropagation()}
     >
       {!loaded && (
-        <div className={`${single ? "h-[300px]" : "h-[200px]"} animate-pulse bg-[#E2E8F0]`} />
+        <div className={`${single ? "h-[220px] sm:h-[300px]" : "h-[160px] sm:h-[200px]"} animate-pulse bg-[#E2E8F0]`} />
       )}
       <img
         src={url}
@@ -203,7 +203,7 @@ function ImagePreview({ url, single }: { url: string; single: boolean }) {
         onLoad={() => setLoaded(true)}
         onError={() => setError(true)}
         className={`w-full object-cover ${
-          single ? "max-h-[500px]" : "h-[200px]"
+          single ? "max-h-[320px] sm:max-h-[500px]" : "h-[160px] sm:h-[200px]"
         } ${loaded ? "" : "hidden"}`}
       />
     </a>

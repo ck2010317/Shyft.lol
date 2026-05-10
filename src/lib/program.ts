@@ -17,7 +17,7 @@ const PROGRAM_ID = new PublicKey("EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ")
 // ========== IPFS URL Helpers ==========
 // On-chain fields are limited to 128 bytes. Full IPFS URLs can be 130+ chars.
 // We store only the CID on-chain and reconstruct the full URL client-side.
-const IPFS_GATEWAY = "dweb.link";
+const IPFS_GATEWAY = "gateway.pinata.cloud";
 const IPFS_CID_REGEX = /\/ipfs\/([a-zA-Z0-9]+)(\/[^?#]*)?(\?.*)?$/;
 
 /** Strip a full IPFS URL down to just the CID (for on-chain storage). */
@@ -37,13 +37,13 @@ function expandIpfsUrl(stored: string): string {
     if (cidMatch) {
       const cid = cidMatch[1];
       const path = cidMatch[2] || "";
-      return `https://${IPFS_GATEWAY}/ipfs/${cid}${path}`;
+      return `https://gateway.pinata.cloud/ipfs/${cid}`;
     }
     return stored;
   }
   // Looks like a bare CID (bafkrei... or Qm...)
   if (stored.startsWith("baf") || stored.startsWith("Qm")) {
-    return `https://${IPFS_GATEWAY}/ipfs/${stored}`;
+    return `https://gateway.pinata.cloud/ipfs/${stored}`;
   }
   return stored;
 }

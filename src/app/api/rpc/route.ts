@@ -8,12 +8,15 @@ import { NextRequest, NextResponse } from "next/server";
  * never sent to the client.
  */
 
-const HELIUS_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE}`;
+// Use Helius if key is set, otherwise fall back to public mainnet RPC
+const HELIUS_RPC_URL = process.env.HELIUS_API_KEY_PRIVATE
+  ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY_PRIVATE}`
+  : "https://api.mainnet-beta.solana.com";
 
-// Simple rate limiting — 200 requests per IP per minute
+// Simple rate limiting — 600 requests per IP per minute
 const ipTimestamps = new Map<string, number[]>();
 const WINDOW_MS = 60_000;
-const MAX_REQUESTS = 200;
+const MAX_REQUESTS = 600;
 
 function getClientIp(request: NextRequest): string {
   return (
@@ -42,6 +45,9 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:3099",
+  "http://localhost:8081",
+  "http://localhost:8082",
+  "http://192.168.1.1:8081",
 ]);
 
 export async function POST(request: NextRequest) {
