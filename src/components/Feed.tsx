@@ -492,12 +492,12 @@ export function OnChainPostCard({
                 </div>
                 {/* Unlock overlay */}
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl px-5 py-4 text-center shadow-lg max-w-[280px]">
-                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-2">
-                      <Lock className="w-5 h-5 text-amber-600" />
+                  <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-[#1E1E2E] dark:to-[#1A1A2E] border border-amber-200 dark:border-white/10 rounded-2xl px-5 py-4 text-center shadow-lg max-w-[280px]">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-2">
+                      <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                     </div>
-                    <p className="text-sm font-semibold text-[#1A1A2E] mb-1">Paid Content</p>
-                    <p className="text-xs text-[#64748B] mb-3">
+                    <p className="text-sm font-semibold text-[#1A1A2E] dark:text-white mb-1">Paid Content</p>
+                    <p className="text-xs text-[#64748B] dark:text-[#94A3B8] mb-3">
                       Unlock this post for <span className="font-bold text-amber-600">{postPrice} SOL</span>
                     </p>
                     <button
