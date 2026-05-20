@@ -59,6 +59,8 @@ interface OnChainPost {
 
 // Gold badge for OG / founder accounts (module-level so all components can use it)
 const GOLD_BADGE_USERNAMES = ["shaan", "shyft"];
+// Profiles created before this Unix timestamp (May 12 2026) keep their blue badge
+const BLUE_BADGE_CUTOFF_UNIX = 1778544000;
 
 function timeAgo(ts: number): string {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -471,6 +473,7 @@ export default function Profile() {
 
   // Gold badge for OG / founder accounts
   const isGoldBadge = GOLD_BADGE_USERNAMES.includes(profileUsername.toLowerCase());
+  const isOGUser = !isGoldBadge && rawCreatedAt > 0 && rawCreatedAt < BLUE_BADGE_CUTOFF_UNIX;
   const badgeBg = isGoldBadge ? "bg-gradient-to-br from-[#F59E0B] to-[#D97706]" : "bg-[#2563EB]";
   const badgeTextColor = isGoldBadge ? "text-[#F59E0B]" : "text-[#2563EB]";
 
@@ -681,10 +684,12 @@ export default function Profile() {
                 {profileName.charAt(0).toUpperCase()}
               </div>
             )}
-            {/* on-chain verified badge */}
-            <div className={`absolute -bottom-0.5 -right-0.5 w-6 h-6 ${badgeBg} rounded-full flex items-center justify-center border-2 border-white`}>
-              <BadgeCheck className="w-3.5 h-3.5 text-white" />
-            </div>
+            {/* verified badge — gold for OGs, blue for existing users before cutoff */}
+            {(isGoldBadge || isOGUser) && (
+              <div className={`absolute -bottom-0.5 -right-0.5 w-6 h-6 ${badgeBg} rounded-full flex items-center justify-center border-2 border-white`}>
+                <BadgeCheck className="w-3.5 h-3.5 text-white" />
+              </div>
+            )}
           </div>
           <div className="mt-3 flex gap-2">
             {isViewingOther ? (
@@ -1234,7 +1239,11 @@ function ProfilePostCard({
           {/* Author line */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-bold text-[15px] text-[#1A1A2E] truncate">{profileName}</span>
-            <BadgeCheck className={`w-4 h-4 flex-shrink-0 ${GOLD_BADGE_USERNAMES.includes(profileUsername.toLowerCase()) ? "text-[#F59E0B]" : "text-[#2563EB]"}`} />
+            {GOLD_BADGE_USERNAMES.includes(profileUsername.toLowerCase()) ? (
+              <BadgeCheck className="w-4 h-4 flex-shrink-0 text-[#F59E0B]" />
+            ) : (() => { const owner = Object.keys(profileMap).find(k => profileMap[k]?.username?.toLowerCase() === profileUsername.toLowerCase()); const ts = parseInt(String(profileMap[owner || ""]?.createdAt || 0), 10); return ts > 0 && ts < BLUE_BADGE_CUTOFF_UNIX; })() ? (
+              <BadgeCheck className="w-4 h-4 flex-shrink-0 text-[#2563EB]" />
+            ) : null}
             <span className="text-[15px] text-[#64748B] truncate">@{profileUsername}</span>
             <span className="text-[#64748B]">·</span>
             <span className="text-[13px] text-[#64748B] flex-shrink-0">{timeAgo(ts)}</span>

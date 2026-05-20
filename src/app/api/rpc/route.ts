@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 /**
  * /api/rpc — Server-side RPC proxy.
  * Forwards JSON-RPC requests to Helius without exposing the API key to the browser.
- * 
+ *
  * SECURITY: The API key is stored in a server-only env var (HELIUS_API_KEY_PRIVATE),
  * never sent to the client.
  */
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.text();
-    
+
     const resp = await fetch(HELIUS_RPC_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await resp.text();
+
     return new NextResponse(data, {
       status: resp.status,
       headers: {

@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import type { ReactElement } from "react";
 import { Heart, MessageCircle, Share2, Repeat2, Globe, Send, Shield, RefreshCw, Image as ImageIcon, X, BadgeCheck, Trash2, Lock, Unlock, DollarSign, Loader2, Coins, TrendingUp, BarChart3, Clock, CheckCircle2, Pencil } from "lucide-react";
 
 // Gold badge for OG / founder accounts
 const GOLD_BADGE_USERNAMES = ["shaan", "shyft"];
+// Profiles created before this Unix timestamp (May 12 2026) keep their blue badge
+const BLUE_BADGE_CUTOFF_UNIX = 1778544000;
 import { useAppStore } from "@/lib/store";
 import { toast } from "@/components/Toast";
 import { RichContent, MediaBar, uploadMedia, isVideoFile } from "@/components/RichContent";
@@ -13,6 +16,8 @@ import { useWallet, useConnection, pollConfirmation } from "@/hooks/usePrivyWall
 import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { ShyftClient, clearRpcCache } from "@/lib/program";
 import ProfileHoverCard from "@/components/ProfileHoverCard";
+import TrendingTokenCard, { type TrendingToken } from "@/components/TrendingTokenCard";
+import TokenTrade from "@/components/TokenTrade";
 
 /** Parse a paid post: content starts with PAID|<price>|<actual content> */
 function parsePaidPost(content: string): { isPaid: boolean; price: number; actualContent: string } {
@@ -405,7 +410,11 @@ export function OnChainPostCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <span className="font-semibold text-[#1A1A2E] text-sm truncate group-hover:text-[#2563EB] transition-colors">{displayName}</span>
-            <BadgeCheck className={`w-3.5 h-3.5 flex-shrink-0 ${GOLD_BADGE_USERNAMES.includes(realUsername.toLowerCase()) ? "text-[#F59E0B]" : "text-[#2563EB]"}`} />
+            {GOLD_BADGE_USERNAMES.includes(realUsername.toLowerCase()) ? (
+              <BadgeCheck className="w-3.5 h-3.5 flex-shrink-0 text-[#F59E0B]" />
+            ) : (() => { const ts = parseInt(String(profile?.createdAt || 0), 10); return ts > 0 && ts < BLUE_BADGE_CUTOFF_UNIX; })() ? (
+              <BadgeCheck className="w-3.5 h-3.5 flex-shrink-0 text-[#2563EB]" />
+            ) : null}
             <span className="text-xs text-[#94A3B8] truncate group-hover:text-[#2563EB]/70 transition-colors">@{username}</span>
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
@@ -1243,6 +1252,8 @@ export default function Feed() {
   const [profileMap, setProfileMap] = useState<Record<string, any>>({});
   const [allComments, setAllComments] = useState<any[]>([]);
   const [allReactions, setAllReactions] = useState<any[]>([]);
+  const [trendingTokens, setTrendingTokens] = useState<TrendingToken[]>([]);
+  const [selectedTrendingToken, setSelectedTrendingToken] = useState<TrendingToken | null>(null);
 
   const [posting, setPosting] = useState(false);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
@@ -1344,6 +1355,25 @@ export default function Feed() {
   useEffect(() => {
     fetchOnchainPosts();
   }, [program, publicKey]);
+
+  // Fetch trending Bags tokens for inline feed cards (refresh every 2 min)
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/bags/trending");
+        const data = await res.json();
+        if (!cancelled && data?.success && Array.isArray(data.response)) {
+          setTrendingTokens(data.response);
+        }
+      } catch (err) {
+        console.warn("trending tokens fetch failed:", err);
+      }
+    };
+    load();
+    const interval = setInterval(load, 120_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   // Auto-refresh feed every 30s — posts (like counts), comments, reactions
   useEffect(() => {
@@ -1744,12 +1774,19 @@ export default function Feed() {
               ...allPolls.map(p => ({ type: "poll" as const, data: p, createdAt: Number(p.createdAt) })),
             ].sort((a, b) => b.createdAt - a.createdAt);
 
-            return feedItems.map((item) => {
+            // Inject one trending token card after every TOKEN_INJECT_EVERY items.
+            // Walk tokens in order (already sorted by 24h volume server-side) so
+            // every render shows the same sequence and we don't repeat the same token.
+            const TOKEN_INJECT_EVERY = 6;
+            const rendered: ReactElement[] = [];
+            let tokenCursor = 0;
+
+            feedItems.forEach((item, idx) => {
               if (item.type === "poll") {
                 const poll = item.data;
                 const profile = profileMap[poll.creator];
                 const isMe = publicKey ? poll.creator === publicKey.toBase58() : false;
-                return (
+                rendered.push(
                   <PollCard
                     key={`poll-${poll.pubkey}`}
                     poll={poll}
@@ -1762,42 +1799,93 @@ export default function Feed() {
                     }}
                   />
                 );
+              } else {
+                const post = item.data;
+                const profile = profileMap[post.author];
+                const isMe = publicKey ? post.author === publicKey.toBase58() : false;
+                rendered.push(
+                  <div key={post.publicKey} id={`post-${post.publicKey}`} className="transition-all duration-300 rounded-2xl">
+                    <OnChainPostCard
+                      post={post}
+                      profile={profile}
+                      isMe={isMe}
+                      program={program}
+                      allComments={allComments}
+                      allReactions={allReactions}
+                      profileMap={profileMap}
+                      onCommentAdded={refreshInteractions}
+                      onReactionAdded={refreshInteractions}
+                      defaultShowComments={focusPostKey === post.publicKey}
+                      onRepost={async (content: string) => {
+                        if (!program || !publicKey) return;
+                        const postId = Date.now();
+                        try {
+                          await program.createPost(postId, content, false);
+                          toast("success", "Repost published! 🔁", "On-chain");
+                          setTimeout(() => fetchOnchainPosts(), 1500);
+                        } catch (err: any) {
+                          toast("error", "Repost failed", err?.message?.slice(0, 80) || "Try again");
+                        }
+                      }}
+                      onDelete={() => {
+                        setTimeout(() => fetchOnchainPosts(), 1500);
+                      }}
+                    />
+                  </div>
+                );
               }
-              const post = item.data;
-              const profile = profileMap[post.author];
-              const isMe = publicKey ? post.author === publicKey.toBase58() : false;
-              return (
-                <div key={post.publicKey} id={`post-${post.publicKey}`} className="transition-all duration-300 rounded-2xl">
-                <OnChainPostCard
-                  post={post}
-                  profile={profile}
-                  isMe={isMe}
-                  program={program}
-                  allComments={allComments}
-                  allReactions={allReactions}
-                  profileMap={profileMap}
-                  onCommentAdded={refreshInteractions}
-                  onReactionAdded={refreshInteractions}
-                  defaultShowComments={focusPostKey === post.publicKey}
-                  onRepost={async (content: string) => {
-                    if (!program || !publicKey) return;
-                    const postId = Date.now();
-                    try {
-                      await program.createPost(postId, content, false);
-                      toast("success", "Repost published! 🔁", "On-chain");
-                      setTimeout(() => fetchOnchainPosts(), 1500);
-                    } catch (err: any) {
-                      toast("error", "Repost failed", err?.message?.slice(0, 80) || "Try again");
-                    }
-                  }}
-                  onDelete={() => {
-                    setTimeout(() => fetchOnchainPosts(), 1500);
-                  }}
-                />
-                </div>
-              );
+
+              // After every Nth item, inject a trending token card (if we have tokens left)
+              const isInjectionPoint = (idx + 1) % TOKEN_INJECT_EVERY === 0 && idx !== feedItems.length - 1;
+              if (isInjectionPoint && trendingTokens.length > 0) {
+                const token = trendingTokens[tokenCursor % trendingTokens.length];
+                tokenCursor++;
+                rendered.push(
+                  <TrendingTokenCard
+                    key={`trend-${token.tokenMint}-${idx}`}
+                    token={token}
+                    onTrade={(picked) => setSelectedTrendingToken(picked)}
+                  />
+                );
+              }
             });
+
+            return rendered;
           })()}
+        </div>
+      )}
+
+      {selectedTrendingToken && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto">
+            <div className="p-5 border-b border-[#E2E8F0]">
+              <div className="flex items-center gap-3">
+                {selectedTrendingToken.image ? (
+                  <img src={selectedTrendingToken.image} alt="" className="w-12 h-12 rounded-full object-cover" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#2563EB] to-[#7C3AED] flex items-center justify-center">
+                    <span className="text-lg font-bold text-white">{selectedTrendingToken.symbol?.[0] || "?"}</span>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-bold text-[#1A1A2E] truncate">{selectedTrendingToken.name}</h2>
+                  <span className="text-sm text-[#64748B]">${selectedTrendingToken.symbol}</span>
+                </div>
+                <button onClick={() => setSelectedTrendingToken(null)} className="p-2 hover:bg-[#F1F5F9] rounded-lg">✕</button>
+              </div>
+              {selectedTrendingToken.description && (
+                <p className="text-xs text-[#64748B] mt-2">{selectedTrendingToken.description}</p>
+              )}
+            </div>
+            <div className="p-4">
+              <TokenTrade
+                tokenMint={selectedTrendingToken.tokenMint}
+                tokenSymbol={selectedTrendingToken.symbol}
+                tokenImage={selectedTrendingToken.image}
+                compact
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>
