@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Shield, MessageCircle, Wallet, Lock, Users, ArrowRight, Zap, ChevronRight, Sparkles, Sun, Moon, Smartphone, Globe } from "lucide-react";
+import { Shield, MessageCircle, Wallet, Lock, Users, ArrowRight, Zap, ChevronRight, Sparkles, Sun, Moon, Activity, Smartphone, Globe } from "lucide-react";
 import { useWallet } from "@/hooks/usePrivyWallet";
 import { useAppStore } from "@/lib/store";
 
@@ -63,6 +63,19 @@ export default function Landing() {
   const [showApp, setShowApp] = useState(false);
   const { login, ready } = useWallet();
   const { theme, toggleTheme } = useAppStore();
+  const [stats, setStats] = useState<{
+    profiles: number; posts: number; follows: number;
+    reactions: number; comments: number; transactions: number;
+    tokens_launched: number;
+  } | null>(null);
+
+  // Fetch live on-chain stats
+  useEffect(() => {
+    fetch("/api/stats")
+      .then(r => r.json())
+      .then(data => { if (!data.error) setStats(data); })
+      .catch(() => {});
+  }, []);
 
   // Auto-cycle features every 4 seconds
   useEffect(() => {
@@ -169,6 +182,109 @@ export default function Landing() {
           <div className="flex items-center gap-2 text-[10px] sm:text-xs text-[#94A3B8] justify-center">
             <Zap className="w-3.5 h-3.5 text-[#2563EB] flex-shrink-0" />
             <span>Real-Time on Solana</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Live On-Chain Stats — Terminal */}
+      <div className="px-4 sm:px-6 md:px-12 py-10 sm:py-14 bg-white border-t border-[#E2E8F0]">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <Activity className="w-4 h-4 text-[#16A34A]" />
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#94A3B8]">Live On-Chain Stats</p>
+            <div className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse" />
+          </div>
+
+          {/* Terminal window */}
+          <div className="rounded-2xl overflow-hidden border border-[#1E293B] shadow-2xl shadow-black/20">
+            {/* Title bar */}
+            <div className="flex items-center gap-2 px-4 py-3 bg-[#1E293B]">
+              <div className="w-3 h-3 rounded-full bg-[#FF5F56]" />
+              <div className="w-3 h-3 rounded-full bg-[#FFBD2E]" />
+              <div className="w-3 h-3 rounded-full bg-[#27C93F]" />
+              <span className="ml-3 text-[11px] text-[#64748B] font-mono">shyft@solana:~$</span>
+              <span className="ml-1 text-[11px] text-[#94A3B8] font-mono">query program EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ</span>
+            </div>
+
+            {/* Terminal body */}
+            <div className="bg-[#0F172A] px-5 py-5 font-mono text-sm space-y-2">
+              <div className="text-[#64748B] text-xs mb-3">
+                <span className="text-[#2563EB]">$</span> fetching on-chain data from Solana mainnet...
+              </div>
+
+              {stats ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
+                    {[
+                      { key: "profiles",        label: "profiles",        value: stats.profiles,        color: "#60A5FA" },
+                      { key: "transactions",    label: "transactions",     value: stats.transactions,    color: "#34D399" },
+                      { key: "posts",           label: "posts",            value: stats.posts,           color: "#A78BFA" },
+                      { key: "comments",        label: "comments",         value: stats.comments,        color: "#F472B6" },
+                      { key: "follows",         label: "follows",          value: stats.follows,         color: "#FBBF24" },
+                      { key: "reactions",       label: "reactions",        value: stats.reactions,       color: "#FB923C" },
+                      { key: "tokens_launched", label: "tokens_launched",  value: stats.tokens_launched, color: "#22D3EE" },
+                    ].map((s) => (
+                      <div key={s.key} className="flex items-center gap-2">
+                        <span className="text-[#475569] text-xs w-2">›</span>
+                        <span className="text-[#94A3B8] text-xs w-36">{s.label}</span>
+                        <span className="text-xs font-bold" style={{ color: s.color }}>
+                          {s.value.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="border-t border-[#1E293B] mt-4 pt-4 space-y-1">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-[#475569]">›</span>
+                      <span className="text-[#94A3B8]">program_id</span>
+                      <span className="text-[#60A5FA] break-all">EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-[#475569]">›</span>
+                      <span className="text-[#94A3B8]">network</span>
+                      <span className="text-[#34D399]">mainnet-beta</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-[#475569]">›</span>
+                      <span className="text-[#94A3B8]">status</span>
+                      <span className="text-[#34D399] flex items-center gap-1">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#34D399] animate-pulse" />
+                        live
+                      </span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-[#64748B] text-xs animate-pulse">loading chain data<span className="animate-ping">_</span></div>
+              )}
+
+              {/* Prompt line */}
+              <div className="flex items-center gap-1 pt-3">
+                <span className="text-[#2563EB] text-xs">$</span>
+                <span className="w-2 h-4 bg-[#60A5FA] animate-pulse inline-block rounded-sm ml-1" />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center gap-3 mt-4">
+            <a
+              href="https://solscan.io/account/EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[11px] text-[#64748B] hover:text-[#2563EB] transition-colors"
+            >
+              <Zap className="w-3 h-3" /> View on Solscan ↗
+            </a>
+            <span className="text-[#CBD5E1]">·</span>
+            <a
+              href="https://explorer.solana.com/address/EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[11px] text-[#64748B] hover:text-[#2563EB] transition-colors"
+            >
+              <Activity className="w-3 h-3" /> Solana Explorer ↗
+            </a>
           </div>
         </div>
       </div>
