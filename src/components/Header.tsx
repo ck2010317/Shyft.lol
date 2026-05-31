@@ -2,6 +2,7 @@
 
 import { Shield, LogOut, Wallet, Bell, Sun, Moon } from "lucide-react";
 import { useWallet } from "@/hooks/usePrivyWallet";
+import { getChainPreference } from "@/components/ChainSelector";
 import { useAppStore, AppNotification } from "@/lib/store";
 import { useProgram } from "@/hooks/useProgram";
 import { useEffect, useState, useRef } from "react";
@@ -28,7 +29,7 @@ const subtitles: Record<string, string> = {
 
 export default function Header() {
   const { activeTab, setCurrentUser, setConnected, notifications, markAllNotificationsRead, setActiveTab, theme, toggleTheme, navigateToProfile, setFocusPostKey } = useAppStore();
-  const { publicKey, connected, login, logout, ready } = useWallet();
+  const { publicKey, connected, login, logout, ready, evmAddress, activeChain } = useWallet();
   const program = useProgram();
   const [showSetup, setShowSetup] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -285,16 +286,37 @@ export default function Header() {
               </div>
             )}
 
-            {/* Wallet button */}
+            {/* Chain badge + wallet button */}
             {connected ? (
-              <button
-                onClick={logout}
-                className="flex items-center gap-2 px-3 py-2 text-xs font-medium bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#64748B] rounded-lg transition-colors"
-              >
-                <Wallet className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}</span>
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Active chain indicator */}
+                <div
+                  className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold"
+                  style={
+                    activeChain === "base"
+                      ? { background: "#EFF6FF", color: "#0052FF" }
+                      : { background: "#faf5ff", color: "#9945FF" }
+                  }
+                >
+                  <div
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ background: activeChain === "base" ? "#0052FF" : "#9945FF" }}
+                  />
+                  {activeChain === "base" ? "Base" : "Solana"}
+                </div>
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-medium bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#64748B] rounded-lg transition-colors"
+                >
+                  <Wallet className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">
+                    {activeChain === "base" && evmAddress
+                      ? `${evmAddress.slice(0, 4)}...${evmAddress.slice(-4)}`
+                      : `${publicKey?.toBase58().slice(0, 4)}...${publicKey?.toBase58().slice(-4)}`}
+                  </span>
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
             ) : (
               <button
                 onClick={login}

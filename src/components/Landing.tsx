@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Shield, MessageCircle, Wallet, Lock, Users, ArrowRight, Zap, ChevronRight, Sparkles, Sun, Moon, Activity, Smartphone, Globe } from "lucide-react";
 import { useWallet } from "@/hooks/usePrivyWallet";
 import { useAppStore } from "@/lib/store";
+import ChainSelector, { type ChainPreference, setChainPreference } from "@/components/ChainSelector";
 
 const features = [
   {
@@ -61,8 +62,19 @@ const features = [
 export default function Landing() {
   const [activeFeature, setActiveFeature] = useState(0);
   const [showApp, setShowApp] = useState(false);
+  const [showChainSelector, setShowChainSelector] = useState(false);
   const { login, ready } = useWallet();
   const { theme, toggleTheme } = useAppStore();
+
+  const handleChainSelect = useCallback((chain: ChainPreference) => {
+    setChainPreference(chain);
+    setShowChainSelector(false);
+    login();
+  }, [login]);
+
+  const openChainSelector = useCallback(() => {
+    setShowChainSelector(true);
+  }, []);
   const [stats, setStats] = useState<{
     profiles: number; posts: number; follows: number;
     reactions: number; comments: number; transactions: number;
@@ -115,7 +127,7 @@ export default function Landing() {
             )}
           </button>
           <button
-            onClick={login}
+            onClick={openChainSelector}
             disabled={!ready}
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-lg transition-colors disabled:opacity-50"
           >
@@ -129,7 +141,7 @@ export default function Landing() {
         {/* Badge */}
         <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 bg-white border border-[#E2E8F0] rounded-full mb-5 sm:mb-6 shadow-sm">
           <div className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse" />
-          <span className="text-[10px] sm:text-xs font-medium text-[#64748B]">Built on Solana · Zero Gas Fees</span>
+          <span className="text-[10px] sm:text-xs font-medium text-[#64748B]">Built on Solana · Base support live · Zero Gas Fees</span>
         </div>
 
         {/* Title */}
@@ -147,7 +159,7 @@ export default function Landing() {
         <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 mt-6 sm:mt-8 w-full sm:w-auto">
           <div className="w-full sm:w-auto flex justify-center">
             <button
-              onClick={login}
+              onClick={openChainSelector}
               disabled={!ready}
               className="flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl transition-colors disabled:opacity-50 shadow-lg shadow-blue-200"
             >
@@ -653,7 +665,7 @@ export default function Landing() {
         <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-[#1A1A2E] mb-3">Ready to own your social?</h3>
         <p className="text-xs sm:text-sm text-[#64748B] mb-6 sm:mb-8 max-w-md mx-auto">Sign in with email, Google, Twitter, or your Solana wallet — and start using the first fully on-chain social platform.</p>
         <button
-          onClick={login}
+          onClick={openChainSelector}
           disabled={!ready}
           className="flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl transition-colors disabled:opacity-50 shadow-lg shadow-blue-200 mx-auto"
         >
@@ -663,6 +675,14 @@ export default function Landing() {
           Program: EEnouVLAoQGMEbrypEhP3Ct5RgCViCWG4n1nCZNwMxjQ · Mainnet
         </p>
       </div>
+
+      {/* Chain selector modal */}
+      {showChainSelector && (
+        <ChainSelector
+          onSelect={handleChainSelect}
+          onClose={() => setShowChainSelector(false)}
+        />
+      )}
 
       {/* Footer */}
       <footer className="px-4 sm:px-6 md:px-12 py-5 sm:py-6 border-t border-[#E2E8F0] bg-[#F8FAFC]">
